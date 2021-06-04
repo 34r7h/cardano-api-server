@@ -1,0 +1,14 @@
+node_modules
+.cache
+.config
+.npm
+.nvm
+.pm2
+.ssh
+.vscode-server
+ssl
+.bash_history
+.bash_logout
+.profile
+.viminfo
+.wget-hsts
