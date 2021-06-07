@@ -261,7 +261,15 @@ app.get('/test', async (req, res) => {
     console.log(test)
     return res.send(JSON.stringify(test))
 })
-app.get('/docs', (req, res) => res.send(JSON.stringify(api)))
+app.get('/docs', (req, res) => {
+	let obj = '<p>'
+Object.entries(api).map(a=>{
+	console.log(a)
+	obj+=a[1].toString()+'<br><br>'
+})	
+	console.log(obj)
+	return res.send(obj+'</p>')
+})
 app.get('/network', (req, res) => res.send(JSON.stringify(api.connect())))
 app.get('/networkinfo', async (req, res) => {
     console.log('gathering network info')
@@ -275,7 +283,7 @@ app.get('/cardano', async (req, res) => {
         let walletServer = api.connect()
 
         let information = await walletServer.getNetworkInformation();
-        console.log('\nBlockchain Information', information.then(d=>d));
+        console.log('\nBlockchain Information', api.networkinfo().then(d=>d));
 
         let parameters = await walletServer.getNetworkParameters();
         console.log('\nBlockchain Parameters', parameters);
@@ -425,16 +433,17 @@ http.createServer(app).listen(port, () => {
 })
 
 https.createServer({
-    key: fs.readFileSync('ssl/privkey.pem'),
-    cert: fs.readFileSync('ssl/cert.pem')
-}, app).listen(portssl, () => {
+    key: fs.readFileSync('keys/key.pem'),
+    cert: fs.readFileSync('keys/cert.pem')
+}, app).listen(portssl, (req) => {
+
     console.log(`Example ssl app listening at https://shwifty.io/`)
 })
-
+/*
 console.log('starting cardano node and wallet servers')
 console.log('closing open nodes', 'cd ~/cardano-node && docker-compose stop')
 
-const stopdockandroll = exec("cd ~/cardano-node && docker-compose stop && docker-compose ps")
+ const stopdockandroll = exec("cd ~/cardano-node && docker-compose stop && docker-compose ps")
 stopdockandroll.on('close', () => {
     console.log('starting nodes', 'cd ~/cardano-node && NETWORK=mainnet docker-compose up -d')
     let startdock = exec("cd ~/cardano-node && NETWORK=mainnet docker-compose up -d && docker-compose ps && cd ..")
@@ -448,5 +457,4 @@ stopdockandroll.on('close', () => {
 })
 stopdockandroll.on('error', (error) => console.log(`error: ${error.message}`));
 stopdockandroll.on("close", code => console.log(`stopdockandroll process exited with code ${code}`));
-
-
+*/
