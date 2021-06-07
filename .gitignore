@@ -6,7 +6,7 @@ node_modules
 .pm2
 .ssh
 .vscode-server
-ssl
+keys
 .bash_history
 .bash_logout
 .profile
