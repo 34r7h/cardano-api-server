@@ -1,172 +1,553 @@
 var fs = require('fs')
 var http = require('http')
 var https = require('https')
+// const fetch = require('node-fetch')
 const express = require('express')
+const { exec } = require("child_process")
+var cors = require('cors')
+const { WalletServer, Seed, AssetWallet, TokenWallet, AddressWallet } = require('cardano-wallet-js');
 const app = express()
+app.use(cors())
 const port = 80
 const portssl = 443
 
+
+// const ls = exec("cd ~/cardano-node && NETWORK=mainnet docker-compose up -d");
+// ls.stdout.on("data", data => console.log(`stdout: ${data}`))
+// ls.stderr.on("data", data => console.log(`stderr: ${data}`))
+// ls.on('error', (error) => console.log(`error: ${error.message}`));
+// ls.on("close", code => console.log(`child process exited with code ${code}`));
+
+
+
+const api = {
+    connect() { return WalletServer.init('http://localhost:8090/v2') },
+    async networkinfo() {
+        const walletserver = api.connect()
+        const networkinfo = walletserver.getNetworkInformation()
+        console.log('networkinfo', await networkinfo.then(d => d))
+        return networkinfo;
+    },
+    keys() { return Seed.generateKeyPair() },
+    async keyhash(key) {
+        console.log(key);
+        return Seed.getKeyHash(key)
+    },
+    buildscript(keyhash) { return Seed.buildSingleIssuerScript(keyhash) },
+    buildtx(coins, ttl, meta, tokens) { return Seed.buildTransaction(coins, ttl, meta, tokens) },
+    buildtxmeta(data) { return Seed.buildTransactionMetadata(data) },
+    buildtxmint(tokens) { return Seed.buildTransactionMint(tokens) },
+    scripthash(script) { return Seed.getScriptHash(script) },
+    getpolicyid(scripthash) { return Seed.getPolicyId(scripthash) },
+    sign(body, keys, meta, scripts) { return Seed.sign(body, keys, meta, scripts) },
+    phrase() { return Seed.generateRecoveryPhrase() }, // 15 words
+    async makewallet(name, pass, phrase) {
+        // [ /make-wallet?name=somelongenough&pass=somelongenoughpassword ]
+        const walletserver = api.connect()
+        const recoveryphrase = phrase || api.phrase();
+        const mnemonicsentence = Seed.toMnemonicList(recoveryphrase);
+        const passphrase = pass;
+        return [recoveryphrase, await walletserver.createOrRestoreShelleyWallet(name, mnemonicsentence, passphrase)];
+    },
+    async listaddresses(id, option, key) {
+        // [ /list-addresses?id=b112d4a931cd6c51bc04ec2b54112a220e66406d ]
+        let wallet = await api.getwallet(id).then(x => x)
+        switch (option) {
+            case 'unused':
+                return await wallet.getUnusedAddresses();
+            case 'used':
+                return await wallet.getUsedAddresses();
+            case 'next':
+                return await wallet.getNextAddress();
+            case 'at':
+                return await wallet.getAddressAt(key);
+            default:
+                break;
+        }
+        return await wallet.getAddresses();
+    },
+    async listwallets() {
+        // [ /list-wallets ]
+        const walletserver = api.connect()
+        return await walletserver.wallets();
+    },
+    async getwallet(id) {
+        // [ /get-wallet?id=b112d4a931cd6c51bc04ec2b54112a220e66406d ]
+        const walletserver = api.connect()
+        return await walletserver.getShelleyWallet(id);
+    },
+    async getpools(stake) {
+        // [ /get-pools , /get-pools?stake=80000000000000 ]
+        const walletserver = api.connect()
+        return await walletserver.getStakePools(stake);
+    },
+    async gettx(id, txid) {
+        // [ /get-tx?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d&tx=601eb8507d68c4fe71c943881f61d76d84bc1d12f728ad5ccbaef2a4b22c7631 ]
+        let wallet = await api.getwallet(id).then(x=>x)
+        return wallet.getTransaction(txid);
+    },
+    async estimatefees(id, address, amount) {
+        // [ /estimate-fees?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d&address=addr_test1qrwn3kkgm0544kqzar5z5j42gstfyzv33v9r6sfd2pn0n5ag39uppmtwkm39f95szc4km6k09ghrn78vthusckne79jsu20937&amount=4353452 ]
+        return await api.getwallet(id).then(async (x)=>{
+            let checkedaddress = new AddressWallet(address);
+            return x.estimateFee([checkedaddress], [amount])
+        })
+    },
+    gettxfee(tx) { return Seed.getTransactionFee(tx) },
+    async walletavailablebalance(id) {
+        // [ /wallet-balance?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d ]
+        let wallet = await api.getwallet(id).then(x=>x)
+        return wallet.getAvailableBalance()
+    },
+    async walletrewardsbalance(id) {
+        // [ /reward-balance?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d ]
+        let wallet = await api.getwallet(id).then(x=>x)
+        return wallet.getRewardBalance()
+    },
+    async wallettotalbalance(id) {
+        // [ /total-balance?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d ]
+        let wallet = await api.getwallet(id).then(x=>x)
+        return wallet.getTotalBalance()
+    },
+    async getdelegation(id) {
+        // [ /get-delegation?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d ]
+        let wallet = await api.getwallet(id).then(x=>x)
+        await wallet.refresh();
+        return wallet.getDelegation();
+    },
+    async walletdelegationfee(id) {
+        // [ /delegation-fee?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d ]
+        let wallet = await api.getwallet(id).then(x=>x)
+        return await wallet.estimateDelegationFee();
+    },
+    async walletdelegate(id, pool, pass) {
+        // [ /delegate?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d&pool=pool1fxcvkd47crljtjlqlj0ullargjrguj9meev2vj0aq574zpq9nec&pass=xymbacardano ]
+        let wallet = await api.getwallet(id).then(x=>x)
+        return await wallet.delegate(pool, pass);
+    },
+    async walletstats(id) {
+        // [ /wallet-stats?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d ]
+        let wallet = await api.getwallet(id).then(x=>x)
+        return await wallet.getUtxoStatistics()
+    },
+    async walletcoinselection(id, addresses, amounts, data) {
+        let wallet = await api.getwallet(id).then(x=>x)
+        return await wallet.getCoinSelection(addresses, amounts, data);
+    },
+    async deletewallet(id) {
+        let wallet = await api.getwallet(id).then(x=>x)
+        return await wallet.delete();
+    },
+    async walletdelegatestop(id, pass) {
+        let wallet = await api.getwallet(id).then(x=>x)
+        return await wallet.stopDelegation(pass);
+    },
+    async renamewallet(id, name) {
+        let wallet = await api.getwallet(id).then(x=>x)
+        return wallet = await wallet.rename(name);
+    },
+    async changepass(id, o, n) {
+        let wallet = await api.getwallet(id).then(x=>x)
+        wallet = await wallet.updatePassphrase(o, n);
+    },
+    async withdrawrewards(address, id, pass) {
+        let wallet = await api.getwallet(id).then(x=>x)
+        let rewardbalance = api.walletrewardsbalance()
+        return await wallet.withdraw(pass, [address], [rewardbalance]);
+    },
+    async poolactions() {
+        const walletserver = api.connect()
+        return await walletserver.stakePoolMaintenanceActions();
+    },
+    async poolgarbagecollection() {
+        const walletserver = api.connect()
+        return await walletserver.triggerStakePoolGarbageCollection();
+    },
+    async gettransactions(id, start, end) {
+        let wallet = await api.getwallet(id).then(x=>x)
+        return await wallet.getTransactions(start, end);
+    },
+    async sendpayment(id, addresses, amounts, pass, meta) {
+        let wallet = await api.getwallet(id).then(x=>x)
+        return await wallet.sendPayment(pass, addresses, amounts, meta);
+    },
+    async forgetpayment(txid) {
+        let wallet = await api.getwallet(id).then(x=>x)
+        return wallet.forgetTransaction(txid)
+    },
+    async submitexternaltx(id, amounts, meta, recoveryphrase) {
+        let walletserver = api.connect()
+        let wallet = await api.getwallet(id).then(x=>x)
+        let addresses = api.listaddresses(id, 'unused').slice(0, 1)
+        let info = api.networkinfo()
+        let ttl = info.node_tip.absolute_slot_number * 12000;
+        let coinselection = api.walletcoinselection(id, addresses, amounts, meta)
+        let rootkey = api.derivekey(recoveryphrase)
+        let signingKeys = coinselection.inputs.map(i => {
+            let privateKey = Seed.deriveKey(rootkey, i.derivation_path).to_raw_key();
+            return privateKey;
+        });
+        let metadata = Seed.buildTransactionMetadata(meta);
+        let txBuild = Seed.buildTransaction(coinselection, ttl, metadata);
+        let txBody = Seed.sign(txBuild, signingKeys, metadata);
+        let signed = Buffer.from(txBody.to_bytes()).toString('hex');
+        return await walletserver.submitTx(signed);
+    },
+    derivekey(phrase) { return Seed.deriveRootKey(phrase); },
+    derivespendingkey(key, path) { return Seed.deriveKey(key, path || ['1852H', '1815H', '0H', '0', '0']).to_raw_key() },
+    deriveaccountkey(key) { return Seed.deriveAccountKey(key, 0) },
+    verifymessage(publickey, message, signed) {
+        return Seed.verifyMessage(publickey, message, signed)
+    },
+    signmessage(message, phrase) {
+        let rootkey = api.derivekey(phrase)
+        let accountkey = api.deriveaccountkey(rootkey)
+        const stakeprvkey = accountkey.derive(CARDANO_CHIMERIC) // chimeric
+            .derive(0);
+        const privatekey = stakeprvkey.to_raw_key();
+        const publickey = privatekey.to_public();
+        const signed = Seed.signMessage(privateKey, message);
+        return api.verifymessage(publickey, message, signed);
+    },
+
+    async minttoken(id, addresses, meta, name, maxsupply, phrase) {
+        let walletserver = api.connect()
+
+        let wallet = await api.getwallet(id).then(x=>x)
+        let keys = api.keys()
+        let policyvkey = keys.publicKey
+        let policyskey = keys.privateKey
+        let script = api.buildscript(api.keyhash(policyvkey))
+        let policyid = api.getpolicyid(api.scripthash(script))
+        let tokendata = {}
+        let data = {}
+        tokendata[policyid] = meta
+        data[0] = tokendata
+        let asset = new AssetWallet(policyid, name, maxsupply);
+        let tokens = [new TokenWallet(asset, script, [keys])];
+        let scripts = tokens.map(t => t.script);
+        let minada = Seed.getMinUtxoValueWithAssets(tokens);
+        let amounts = [minada];
+        let info = api.networkinfo()
+        let ttl = info.node_tip.absolute_slot_number * 12000;
+        let coinselection = api.walletcoinselection(id, addresses, amounts, data)
+        let rootkey = api.derivekey(phrase)
+        let signingkeys = coinselection.inputs.map(i => {
+            let privatekey = api.derivekey(rootkey, i.derivation_path)
+            return privatekey;
+        });
+        tokens.filter(t => t.scriptKeyPairs).forEach(t => signingkeys.push(...t.scriptKeyPairs.map(k => k.privateKey.to_raw_key())));
+        let metadata = api.buildtxmeta(data)
+        let mint = api.buildtxmint(tokens)
+        coinselection.outputs = coinselection.outputs.map(output => {
+            if (output.address === addresses[0].address) {
+                output.assets = tokens.map(t => {
+                    let asset = {
+                        policy_id: t.asset.policy_id,
+                        asset_name: t.asset.asset_name,
+                        quantity: t.asset.quantity
+                    };
+                    return asset;
+                });
+            }
+            return output;
+        });
+        let currentfee = coinselection.inputs.reduce((acc, c) => c.amount.quantity + acc, 0)
+            - coinselection.outputs.reduce((acc, c) => c.amount.quantity + acc, 0)
+            - coinselection.change.reduce((acc, c) => c.amount.quantity + acc, 0);
+        let change = coinselection.change.reduce((acc, c) => c.amount.quantity + acc, 0);
+        let txbody = api.buildtx(coinselection, ttl, metadata, tokens);
+        txbody.set_mint(mint);
+        let tx = api.sign(txbody, signingkeys, metadata, scripts)
+        let fee = api.gettxfee(tx)
+        coinselection.change[0].amount.quantity = change - (parseInt(fee.to_str()) - currentfee);
+        metadata = api.buildtxmeta(data);
+        txbody = api.buildtx(coinselection, ttl, metadata, tokens)
+        txbody.set_mint(mint);
+        tx = api.sign(txbody, signingkeys, metadata, scripts)
+        let signed = Buffer.from(tx.to_bytes()).toString('hex');
+        return await walletserver.submitTx(signed);
+    }
+}
+
 app.get('/', (req, res) => {
-  res.send('Hello World! We will be minting soon.')
+    let obj = '<p>'
+    Object.entries(api).map(a => {
+        console.log(a)
+        obj += a[1].toString() + '<br><br>'
+    })
+    console.log(obj)
+    return res.send(obj + '</p>')
 })
-app.get('/test', (req, res)=>res.send('endpoint works!'))
+
+app.get('/network', (req, res) => res.send(JSON.stringify(api.connect())))
+app.get('/network-info', async (req, res) => {
+    let ni = await api.networkinfo().then(d => d).catch(e=>e)
+    res.send(JSON.stringify(ni))
+    return ni
+})
+app.get('/keys', (req, res) => res.send(JSON.stringify(api.keys())))
+app.get('/phrase', (req, res) => res.send(api.phrase()))
+app.get('/make-wallet', async (req, res) => {
+    let walletret = api.makewallet(req.query.name, req.query.pass, req.query.phrase)
+    res.send(JSON.stringify(await walletret.then(x => x).catch(e=>e)))
+    return walletret
+})
+app.get('/get-wallet', async (req, res)=>{
+    let wallet = await api.getwallet(req.query.id).then(x=>x).catch(e=>e)
+    res.send(JSON.stringify(wallet))
+    return wallet
+})
+app.get('/wallet-balance', async (req, res)=>{
+    let balance = await api.walletavailablebalance(req.query.wallet).then(x=>x).catch(e=>e)
+    res.send(JSON.stringify(balance))
+    return balance
+})
+app.get('/wallet-stats', async (req, res)=>{
+    let stats = await api.walletstats(req.query.wallet).then(x=>x).catch(e=>e)
+    res.send(JSON.stringify(stats))
+    return stats
+})
+app.get('/reward-balance', async (req, res)=>{
+    let balance = await api.walletrewardsbalance(req.query.wallet).then(x=>x).catch(e=>e)
+    res.send(JSON.stringify(balance))
+    return balance
+})
+app.get('/total-balance', async (req, res)=>{
+    let balance = await api.wallettotalbalance(req.query.wallet).then(x=>x).catch(e=>e)
+    res.send(JSON.stringify(balance))
+    return balance
+})
+app.get('/list-addresses', async (req, res) => {
+    let addresses = await api.listaddresses(req.query.id, req.query.option, req.query.key).then(x => x).catch(e=>e)
+    res.send(JSON.stringify(addresses))
+    return addresses
+})
+app.get('/list-wallets', async (req, res) => {
+    let wallets = await api.listwallets().then(x=>x).catch(e=>e)
+    res.send(JSON.stringify(wallets))
+    return wallets
+})
+app.get('/get-delegation', async (req, res) => {
+    let delegated = await api.getdelegation(req.query.wallet).then(x=>x).catch(e=>e)
+    res.send(JSON.stringify(delegated))
+    return delegated
+})
+app.get('/delegation-fee', async (req, res) => {
+    let dfee = await api.walletdelegationfee(req.query.wallet).then(x=>x).catch(e=>e)
+    res.send(dfee)
+    return dfee
+})
+app.get('/delegate', async (req, res) => {
+    let delegate = await api.walletdelegate(req.query.wallet, req.query.pool, req.query.pass).then(x=>x).catch(e=>e)
+    res.send(delegate)
+    return delegate
+})
+app.get('/key-hash', async (req, res) => {
+    let keys = api.keys()
+    let keyhashret = await api.keyhash(keys.publicKey)
+    res.send(keyhashret)
+    return keyhashret
+})
+app.get('/get-pools', async(req, res) => {
+    const pools = await api.getpools(req.query.stake).then(x=>x).catch(e=>e)
+    res.send(JSON.stringify(pools))
+    return pools
+})
+app.get('/get-tx', async(req, res)=>{
+    let tx = await api.gettx(req.query.wallet, req.query.tx).then(x=>x).catch(e=>e)
+    res.send(JSON.stringify(tx))
+    return tx
+})
+app.get('/estimate-fees', async(req, res)=>{
+    let estimate = await api.estimatefees(req.query.wallet, req.query.address, +req.query.amount, req.query.data, req.query.assets).then(x=>x).catch(e=>e)
+    res.send(JSON.stringify(estimate))
+    return estimate
+})
+app.get('/get-tx-fee', async (req, res) => {
+    let txfee = api.gettxfee(req.query.tx)
+    res.send(txfee)
+    return txfee
+})
 app.get('/cardano', async (req, res) => {
-let a = (async () => {
-    const { WalletServer, Seed, AssetWallet, TokenWallet } = require('cardano-wallet-js');
-    let walletServer = WalletServer.init('http://localhost:8090/v2')
+    let a = (async () => {
+        let walletServer = api.connect()
 
-    let information = await walletServer.getNetworkInformation();
-    console.log('\nBlockchain Information', information);
+        let information = await walletServer.getNetworkInformation();
+        console.log('\nBlockchain Information', api.networkinfo().then(d => d));
 
-    let parameters = await walletServer.getNetworkParameters();
-    console.log('\nBlockchain Parameters', parameters);
+        let parameters = await walletServer.getNetworkParameters();
+        console.log('\nBlockchain Parameters', parameters);
 
-    let clock = await walletServer.getNetworkClock();
-    console.log('\nBlockchain Clock', clock);
+        let clock = await walletServer.getNetworkClock();
+        console.log('\nBlockchain Clock', clock);
 
-    let recoveryPhrase = Seed.generateRecoveryPhrase();
-    let mnemonic_sentence = Seed.toMnemonicList(recoveryPhrase);
-    console.log('\nRecovery Phrase',recoveryPhrase, mnemonic_sentence)
-    let passphrase = 'xymbaxymba';
-    let name = 'xymba-wallet';
-     let wallet = await walletServer.createOrRestoreShelleyWallet(name, mnemonic_sentence, passphrase);
+        let recoveryPhrase = Seed.generateRecoveryPhrase();
+        let mnemonic_sentence = Seed.toMnemonicList(recoveryPhrase);
+        console.log('\nRecovery Phrase', recoveryPhrase, mnemonic_sentence)
+        let passphrase = 'xymbaxymba';
+        let name = 'xymba-wallet';
+        let wallet = await walletServer.createOrRestoreShelleyWallet(name, mnemonic_sentence, passphrase);
 
-    let wallets = await walletServer.wallets();
-    let xymbawallet = wallets[0]
-    console.log('\nXymba Wallet Info', '\n Balance', xymbawallet.getAvailableBalance(), xymbawallet.id, Object.keys(xymbawallet))
+        let wallets = await walletServer.wallets();
+        let xymbawallet = wallets[0]
+        console.log('\nXymba Wallet Info', '\n Balance', xymbawallet.getAvailableBalance(), xymbawallet.id, Object.keys(xymbawallet))
 
-    let addresses = await xymbawallet.getAddresses(); // list will contain at least 20 address
-    console.log('\nAddresses', addresses.length, addresses[0])
+        let addresses = await xymbawallet.getAddresses(); // list will contain at least 20 address
+        console.log('\nAddresses', addresses.length, addresses[0])
 
-    // address to hold the minted tokens. You can use which you want.
-    addresses = [addresses[0]];
+        // address to hold the minted tokens. You can use which you want.
+        addresses = [addresses[0]];
 
-    // policy public/private keypair
-    let keyPair = Seed.generateKeyPair();
-    let policyVKey = keyPair.publicKey;
-    let policySKey = keyPair.privateKey;
+        // policy public/private keypair
+        let keyPair = api.keys();
+        let policyVKey = keyPair.publicKey;
+        let policySKey = keyPair.privateKey;
 
-    console.log('policy keys', {policyVKey, policySKey});
+        console.log('policy keys', { policyVKey, policySKey });
 
-    // generate single issuer native script
+        // generate single issuer native script
 
-    let keyHash = Seed.getKeyHash(policyVKey);
-    let script = Seed.buildSingleIssuerScript(keyHash);
+        let keyHash = Seed.getKeyHash(policyVKey);
+        let script = Seed.buildSingleIssuerScript(keyHash);
 
-    //generate policy id
+        //generate policy id
 
-    let scriptHash = Seed.getScriptHash(script);
-    let policyId = Seed.getPolicyId(scriptHash);
+        let scriptHash = Seed.getScriptHash(script);
+        let policyId = Seed.getPolicyId(scriptHash);
 
-    // metadata
-    let data = {};
-    let tokenData = {}
-    tokenData[policyId] = {
-        XYMBA: {
-            types: "00-ff",
-            vid: "1.1.1",
-            name: "Xymba",
-            description: "Cosmic Psychedelic Tokens",
-            type: "Token"
-        }
-    };
-    data[0] = tokenData;
-    // asset
-    let asset = new AssetWallet(policyId, "XYMBA", 1000000);
-    console.log('asset', asset);
+        // metadata
+        let data = {};
+        let tokenData = {}
+        tokenData[policyId] = {
+            XYMBA: {
+                types: "00-ff",
+                vid: "1.1.1",
+                name: "Xymba",
+                description: "Cosmic Psychedelic Tokens",
+                type: "Token"
+            }
+        };
+        data[0] = tokenData;
+        // asset
+        let asset = new AssetWallet(policyId, "XYMBA", 1000000);
+        console.log('asset', asset);
 
-    // token
-    let tokens = [new TokenWallet(asset, script, [keyPair])];
-    console.log('tokens', tokens);
+        // token
+        let tokens = [new TokenWallet(asset, script, [keyPair])];
+        console.log('tokens', tokens);
 
-     //scripts
-    let scripts = tokens.map(t => t.script);
+        //scripts
+        let scripts = tokens.map(t => t.script);
 
-    // get min ada for address holding tokens
-    let minAda = Seed.getMinUtxoValueWithAssets(tokens);
-    let amounts = [minAda];
-    console.log('amounts', amounts);
+        // get min ada for address holding tokens
+        let minAda = Seed.getMinUtxoValueWithAssets(tokens);
+        let amount = [minAda];
+        console.log('amounts', amount);
 
-    // get ttl info
-//  let info = await walletServer.getNetworkInformation();
-    let ttl = information.node_tip.absolute_slot_number * 12000;
+        // get ttl info
+        //  let info = await walletServer.getNetworkInformation();
+        let ttl = information.node_tip.absolute_slot_number * 12000;
 
-    console.log('ttl', ttl);
-    // get coin selection structure (without the assets)
-    let coinSelection = await xymbawallet.getCoinSelection(addresses, amounts, data).then(x=>x).catch(e=>e);
-    console.log('coinSelection', coinSelection.response.status, coinSelection.response.data);
+        console.log('ttl', ttl);
+        // get coin selection structure (without the assets)
+        let coinSelection = await xymbawallet.getCoinSelection(addresses, amounts, data).then(x => x).catch(e => e);
+        console.log('coinSelection', coinSelection.response.status, coinSelection.response.data);
 
-    // add signing keys
-    let rootKey = Seed.deriveRootKey('tank kind bike insect sister legend gown lava clinic music bid opera daring switch salmon');
-    if(!coinSelection.inputs) return {information, xymbawallet, addresses, asset, tokens}
+        // add signing keys
+        let rootKey = Seed.deriveRootKey('tank kind bike insect sister legend gown lava clinic music bid opera daring switch salmon');
+        if (!coinSelection.inputs) return { information, xymbawallet, addresses, asset, tokens }
         let signingKeys = coinSelection.inputs.map(i => {
-        let privateKey = Seed.deriveKey(rootKey, i.derivation_path).to_raw_key();
-        return privateKey;
-    });
+            let privateKey = Seed.deriveKey(rootKey, i.derivation_path).to_raw_key();
+            return privateKey;
+        });
 
-    // add policy signing keys
-    tokens.filter(t => t.scriptKeyPairs).forEach(t => signingKeys.push(...t.scriptKeyPairs.map(k => k.privateKey.to_raw_key())));
+        // add policy signing keys
+        tokens.filter(t => t.scriptKeyPairs).forEach(t => signingKeys.push(...t.scriptKeyPairs.map(k => k.privateKey.to_raw_key())));
 
-    let metadata = Seed.buildTransactionMetadata(data);
-    let mint = Seed.buildTransactionMint(tokens);
+        let metadata = Seed.buildTransactionMetadata(data);
+        let mint = Seed.buildTransactionMint(tokens);
 
-    // the wallet currently doesn't support including tokens not previuosly minted
-    // so we need to include it manually.
-    coinSelection.outputs = coinSelection.outputs.map(output => {
-        if (output.address === addresses[0].address) {
-            output.assets = tokens.map(t => {
-                let absolute_slot_number = {
-                    policy_id: t.asset.policy_id,
-                    asset_name: t.asset.asset_name,
-                    quantity: t.asset.quantity
-                };
-                return asset;
-            });
-        }
-        return output;
-    });
+        // the wallet currently doesn't support including tokens not previuosly minted
+        // so we need to include it manually.
+        coinSelection.outputs = coinSelection.outputs.map(output => {
+            if (output.address === addresses[0].address) {
+                output.assets = tokens.map(t => {
+                    let absolute_slot_number = {
+                        policy_id: t.asset.policy_id,
+                        asset_name: t.asset.asset_name,
+                        quantity: t.asset.quantity
+                    };
+                    return asset;
+                });
+            }
+            return output;
+        });
 
-    let currentFee = coinSelection.inputs.reduce((acc, c) => c.amount.quantity + acc, 0)
-        - coinSelection.outputs.reduce((acc, c) => c.amount.quantity + acc, 0)
-        - coinSelection.change.reduce((acc, c) => c.amount.quantity + acc, 0);
-    let change = coinSelection.change.reduce((acc, c) => c.amount.quantity + acc, 0);
+        let currentFee = coinSelection.inputs.reduce((acc, c) => c.amount.quantity + acc, 0)
+            - coinSelection.outputs.reduce((acc, c) => c.amount.quantity + acc, 0)
+            - coinSelection.change.reduce((acc, c) => c.amount.quantity + acc, 0);
+        let change = coinSelection.change.reduce((acc, c) => c.amount.quantity + acc, 0);
 
-    // we need to sing the tx and calculate the actual fee and the build again 
-    // since the coin selection doesnt calculate the fee with the asset tokens included
-    let txBody = Seed.buildTransaction(coinSelection, ttl, metadata, tokens);
-    txBody.set_mint(mint);
-    let tx = Seed.sign(txBody, signingKeys, metadata, scripts);
-    let fee = Seed.getTransactionFee(tx);
-    coinSelection.change[0].amount.quantity = change - (parseInt(fee.to_str()) - currentFee);
+        // we need to sing the tx and calculate the actual fee and the build again 
+        // since the coin selection doesnt calculate the fee with the asset tokens included
+        let txBody = Seed.buildTransaction(coinSelection, ttl, metadata, tokens);
+        txBody.set_mint(mint);
+        let tx = Seed.sign(txBody, signingKeys, metadata, scripts);
+        let fee = Seed.getTransactionFee(tx);
+        coinSelection.change[0].amount.quantity = change - (parseInt(fee.to_str()) - currentFee);
 
-    // after tx signed the metadata is cleaned, so we need to build it again.
-    metadata = Seed.buildTransactionMetadata(data);
+        // after tx signed the metadata is cleaned, so we need to build it again.
+        metadata = Seed.buildTransactionMetadata(data);
 
-    // finally build the tx again and sing it
-    txBody = Seed.buildTransaction(coinSelection, ttl, metadata, tokens);
-    txBody.set_mint(mint);
-    tx = Seed.sign(txBody, signingKeys, metadata, scripts);
+        // finally build the tx again and sing it
+        txBody = Seed.buildTransaction(coinSelection, ttl, metadata, tokens);
+        txBody.set_mint(mint);
+        tx = Seed.sign(txBody, signingKeys, metadata, scripts);
 
-    // submit the tx
-    let signed = Buffer.from(tx.to_bytes()).toString('hex');
-    let txId = await walletServer.submitTx(signed);
-    console.log('txId', txId)
+        // submit the tx
+        let signed = Buffer.from(tx.to_bytes()).toString('hex');
+        let txId = await walletServer.submitTx(signed);
+        console.log('txId', txId)
 
-    return information
+        return information
 
-})()
-	let cardano = async () => await a.then(x=>JSON.stringify(x, null, 2))
-	let resdata = cardano()
-	console.log(resdata)
-	res.send(await resdata)
+    })()
+    let cardano = async () => await a.then(x => JSON.stringify(x, null, 2))
+    let resdata = cardano()
+    console.log(resdata)
+    res.send(await resdata)
+})
+app.get('/test', async (req, res) => {
+    let key = ''
+    console.log(api.keyhash(api.keys()[1]));
+    res.send('ok')
 })
 http.createServer(app).listen(port, () => {
-  console.log(`Example app listening at http://shwifty.io/`)
-});
-https.createServer({
-  key: fs.readFileSync('ssl/privkey.pem'),
-  cert: fs.readFileSync('ssl/cert.pem')
-}, app).listen(portssl, () => {
-  console.log(`Example ssl app listening at https://shwifty.io/`)
+    console.log(`Example app listening at http://shwifty.io/`)
 })
+https.createServer({
+    key: fs.readFileSync('keys/key.pem'),
+    cert: fs.readFileSync('keys/cert.pem')
+}, app).listen(portssl, () => {
+    console.log(`Example ssl app listening at https://shwifty.io/`)
+})
+/*
+console.log('starting cardano node and wallet servers')
+console.log('closing open nodes', 'cd ~/cardano-node && docker-compose stop')
 
+ const stopdockandroll = exec("cd ~/cardano-node && docker-compose stop && docker-compose ps")
+stopdockandroll.on('close', () => {
+    console.log('starting nodes', 'cd ~/cardano-node && NETWORK=mainnet docker-compose up -d')
+    let startdock = exec("cd ~/cardano-node && NETWORK=mainnet docker-compose up -d && docker-compose ps && cd ..")
+    startdock.stdout.on("data", data => {
+        console.log(`stdout: ${data}`)
+
+        startdock.stderr.on("data", data => console.log(`stderr: ${data}`))
+        startdock.on('error', (error) => console.log(`error: ${error.message}`));
+        startdock.on("close", code => console.log(`startdock process exited with code ${code}`));
+    })
+})
+stopdockandroll.on('error', (error) => console.log(`error: ${error.message}`));
+stopdockandroll.on("close", code => console.log(`stopdockandroll process exited with code ${code}`));
+*/

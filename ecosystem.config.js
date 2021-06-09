@@ -1,6 +1,6 @@
 module.exports = {
   apps : [{
-    script: 'index-beta.js',
+    script: 'index.js',
     watch: '.',
     max_memory_restart: '300M'
  }],
