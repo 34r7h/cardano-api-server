@@ -132,7 +132,13 @@ const api = {
     },
     async walletcoinselection(id, addresses, amounts, data) {
         let wallet = await api.getwallet(id).then(x=>x)
-        return await wallet.getCoinSelection(addresses, amounts, data);
+        if(addresses == undefined) addresses = await api.listaddresses(id, 'unused').then(x=>x)
+        console.log(addresses[0]);
+        // addresses = addresses.filter(x=>x.amounts)
+        if(data && typeof data == 'string') data = JSON.parse(data)
+        console.log(id, addresses.length, amounts, typeof data);
+        // console.log(await wallet.getCoinSelection(addresses, amounts, data).then(x=>x));
+        // return await wallet.getCoinSelection(addresses, amounts, data);
     },
     async deletewallet(id) {
         let wallet = await api.getwallet(id).then(x=>x)
@@ -368,6 +374,15 @@ app.get('/get-tx-fee', async (req, res) => {
     let txfee = api.gettxfee(req.query.tx)
     res.send(txfee)
     return txfee
+})
+app.get('/coin-select', async (req, res) => {
+    console.log(typeof req.query.data, req.query.data, req.query.data);
+    let amounts = req.query.amounts.split(',').map(x=>+x)
+    console.log(amounts, typeof amounts)
+    let coins = await api.walletcoinselection(req.query.wallet, req.query.addresses && req.query.addresses.split(','), req.query.amounts.split(',').map(x=>+x), req.query.data).then(x=>x).catch(e=>e)
+    console.log(coins);
+    res.send(coins)
+    return coins
 })
 app.get('/cardano', async (req, res) => {
     let a = (async () => {
