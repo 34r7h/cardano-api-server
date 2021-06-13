@@ -22,14 +22,16 @@ const portssl = 443
 
 const api = {
     connect() { return WalletServer.init('http://localhost:8090/v2') },
-    async networkinfo() {
+    async networkinfo() { // [ /network-info ]
         const walletserver = api.connect()
         const networkinfo = walletserver.getNetworkInformation()
         console.log('networkinfo', await networkinfo.then(d => d))
         return networkinfo;
     },
-    keys() { return Seed.generateKeyPair() },
-    async keyhash(key) {
+    keys() { // [ /keys ]
+        return Seed.generateKeyPair() 
+    },
+    async keyhash(key) { // [ /key-hash ]
         console.log(key);
         return Seed.getKeyHash(key)
     },
@@ -277,13 +279,13 @@ const api = {
 }
 
 app.get('/', (req, res) => {
-    let obj = '<p>'
+    let obj = '<ul>'
     Object.entries(api).map(a => {
         console.log(a)
-        obj += a[1].toString() + '<br><br>'
+        obj += `<li style="color: ${a[1].toString().includes('// [') ? 'blue' : 'black'}">` + a[1].toString() + '</li><br><br>'
     })
     console.log(obj)
-    return res.send(obj + '</p>')
+    return res.send(obj + '</ul>')
 })
 
 app.get('/network', (req, res) => res.send(JSON.stringify(api.connect())))
