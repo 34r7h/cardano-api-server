@@ -5,39 +5,6 @@ sudo setcap cap_net_bind_service=+ep ~/.nvm/versions/node/v14.17.0/bin/node
 sudo apt-get install libcap2-bin
 ***
 
-# Research
-## Tech
-https://stackoverflow.com/questions/6160283/file-encryption-into-n-files-but-with-at-least-and-only-m-required-to-decrypt
-https://en.wikipedia.org/wiki/Secret_sharing
-    -- https://github.com/karlgluck/ThresholdJS
-    -- https://github.com/grempe/secrets.js
-
-## NFT Metadata 
-https://github.com/onflow/flow-nft/issues/9
-https://schema.org/docs/schemas.html
-https://github.com/interNFT/nft-rfc
-https://www.arweave.org/
-https://www.reddit.com/r/CardanoDevelopers/comments/mkhlv8/nft_metadata_standard/
-https://nftschool.dev/reference/metadata-schemas/#ethereum-and-evm-compatible-chains
-https://github.com/Berry-Pool/NFT-Metadata-Standard-CIP/blob/main/CIP-MetadataTokenLink.md
-https://nomicon.io/Standards/NonFungibleToken/Metadata.html
-
-## Parallel Projects
-https://www.cnft.io/
-https://www.nft-maker.io/ 
-    -- https://www.nft-maker.io/static/metadata_schema.json
-https://www.nft-dao.org/
-https://professorcardano.com/
-https://lovada.art/
-https://somint.art/Blueprint
-
-## Creatives
-https://cardanobits.art/
-https://www.sushibyte.io/
-https://www.cardanokidz.com/
-https://professorcardano.com/
-https://spacebudz.io/
-
 # Installation
 
 ## Server setup and configs for Ubuntu 20 lts on gCloud
@@ -89,4 +56,37 @@ echo "cd ~/cardano-api-server && nodemon index.js" >> server.sh
 pm2 start ecosystem.config.js
 pm2 save
 sudo reboot
+
+# Research
+## Tech
+https://stackoverflow.com/questions/6160283/file-encryption-into-n-files-but-with-at-least-and-only-m-required-to-decrypt
+https://en.wikipedia.org/wiki/Secret_sharing
+    -- https://github.com/karlgluck/ThresholdJS
+    -- https://github.com/grempe/secrets.js
+
+## NFT Metadata 
+https://github.com/onflow/flow-nft/issues/9
+https://schema.org/docs/schemas.html
+https://github.com/interNFT/nft-rfc
+https://www.arweave.org/
+https://www.reddit.com/r/CardanoDevelopers/comments/mkhlv8/nft_metadata_standard/
+https://nftschool.dev/reference/metadata-schemas/#ethereum-and-evm-compatible-chains
+https://github.com/Berry-Pool/NFT-Metadata-Standard-CIP/blob/main/CIP-MetadataTokenLink.md
+https://nomicon.io/Standards/NonFungibleToken/Metadata.html
+
+## Parallel Projects
+https://www.cnft.io/
+https://www.nft-maker.io/ 
+    -- https://www.nft-maker.io/static/metadata_schema.json
+https://www.nft-dao.org/
+https://professorcardano.com/
+https://lovada.art/
+https://somint.art/Blueprint
+
+## Creatives
+https://cardanobits.art/
+https://www.sushibyte.io/
+https://www.cardanokidz.com/
+https://professorcardano.com/
+https://spacebudz.io/
 
