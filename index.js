@@ -46,7 +46,7 @@ let docs = (() => {
     api[`pool-actions`] = { example: `/pool-actions` }
     api[`pool-garbage`] = { example: `/pool-garbage` }
     api[`get-txs`] = { example: `/get-txs?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d` }
-    api[`send-payment`] = { example: `/send-payment?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d&addresses=addr_test1qzu06fxmkc5hgjxcucuhlx5rwgnphnf6cj3t4gpukp5dkyag39uppmtwkm39f95szc4km6k09ghrn78vthusckne79js6xn5dj&amounts=555555&pass=xymbacardano` }
+    api[`send-payment`] = { example: `/send-payment?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d&addresses=addr_test1qzu06fxmkc5hgjxcucuhlx5rwgnphnf6cj3t4gpukp5dkyag39uppmtwkm39f95szc4km6k09ghrn78vthusckne79js6xn5dj&amounts=5555555&pass=xymbacardano&data={"sup":"world"}` }
     api[`cancel-payment`] = { example: `/cancel-payment?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d&&tx=11b880e7bb7f30badf8919446f2416d7c1f6724d8add948308afd7662161c493` }
     api[`submit-tx`] = { example: `/submit-tx?wallet=22283c232d1d71829ce14ea3a1924c3e5c4ee522&amounts=3333333&data={"1":"transactions"}&phrase=[grow,%20doll,%20joy,%20ceiling,%20cage,%20once,%20task,%20soup,%20fitness,%20one,%20recycle,%20tower,%20shrug,%20dentist,%20fever]` }
     return api
@@ -339,7 +339,7 @@ app.get('/', (req, res) => {
     let obj = '<ul>'
     Object.entries(docs).map(z => {
         obj += `<li style=" align-items:center;"><b>${z[0]}</b><br><br>`
-        obj += '<div style="overflow-wrap: anywhere;">Example<br><a href="' + z[1].example + '">' + z[1].example + '</a></div><br>'
+        obj += '<div style="overflow-wrap: anywhere;">Example<br><a href="' + encodeURI(z[1].example) + '">' + z[1].example + '</a></div><br>'
         obj += Object.keys(api).includes(z[0].replace('-', '')) ? `Code<br><code style="font: 12px mono; white-space: pre-wrap; background: rgba(0,0,0,.03); padding: 8px">`+api[z[0].replace('-', '')].toString()+`</code><br>` : ''
         obj += '<br></li>'
     })
@@ -483,8 +483,6 @@ app.get('/pool-garbage', async (req, res) => {
     return poolgarbage
 })
 app.get('/send-payment', async (req, res) => {
-    console.log(typeof req.query.data, req.query.data, req.query, req.query.data && JSON.parse(req.query.data))
-
     let sendpayment = await api.sendpayment(req.query.wallet, req.query.addresses && req.query.addresses.split(',').map(y => new AddressWallet(y)), req.query.amounts.split(',').map(x => +x), req.query.pass, req.query.data ? JSON.parse(req.query.data) : null).then(x => x)
     res.send(JSON.stringify(sendpayment))
     return sendpayment
