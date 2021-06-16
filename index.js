@@ -105,9 +105,8 @@ const api = {
         // console.log('building mint tx', JSON.stringify([coinselection, ttl, tokens, keys, data, cardanoconfig], null, 2));
         console.log('coinselection', coinselection,'\nttl '+ ttl,'\ntokens '+ JSON.stringify(tokens),'\nkeys'+ JSON.stringify(keys),'\ndata '+ JSON.stringify(data),'\ncardanoconfig '+ cardanoconfig);
         // console.log(Seed.buildTransactionWithToken(coinselection, ttl, tokens, keys, {data: data, config: cardanoconfig}))
-        console.log('building tx mint');
-        let build = Seed.buildTransactionWithToken(coinselection, ttl, tokens, [keys[1]], {data: data, config: cardanoconfig})
-        console.log('build', build);
+        console.log('building tx mint', keys);
+        let build = Seed.buildTransactionWithToken(coinselection, ttl, tokens, keys, {data: data, config: cardanoconfig})
         return build
     },
     scripthash(script) { return Seed.getScriptHash(script) },
@@ -279,7 +278,7 @@ const api = {
     },
     sign(body, keys, meta, scripts) { 
         // console.log('signing\n', body,'\n', keys,'\n', meta,'\n', scripts);
-        let sign = Seed.sign(body, [keys[1]], meta, scripts)
+        let sign = Seed.sign(body, keys, meta, scripts)
         // console.log('sign', sign);
         return sign
     },
@@ -295,53 +294,34 @@ const api = {
     },
 
     async mint(id, addresses, meta, name, maxsupply, phrase) {
-        // console.log(id, '\n'+ JSON.stringify(addresses), '\n'+ JSON.stringify(meta), '\n'+ name, '\n'+ maxsupply, '\n'+ phrase)
         let walletserver = api.connect()
-        // let wallet = await api.getwallet(id).then(x => x)
         let keys = api.keys()
-        // console.log(keys, walletserver);
         let policyvkey = keys.publicKey
         let policyskey = keys.privateKey
         let policyhash = await api.keyhash(policyvkey).then(x=>x).catch(x=>x)
-        // console.log('policyhash', await policyhash);
         let script = api.buildscript(policyhash)
-        // console.log('script',script);
         let policyid = api.getpolicyid(api.scripthash(script))
-        // console.log('policy', policyid)
         let tokendata = {}
         let data = {}
         tokendata[policyid] = meta
         data[0] = tokendata
         let asset = new AssetWallet(policyid, name, maxsupply);
         let tokens = [new TokenWallet(asset, script, [keys])];
-        // console.log('tokens', tokens, JSON.stringify(data));
         let scripts = tokens.map(t => t.script);
-        // console.log('scripts',scripts);
         let minada = Seed.getMinUtxoValueWithAssets([asset]);
-        // console.log('minada', minada);
         let amounts = [minada];
         let info = await api.networkinfo().then(x=>x)
-        // console.log(info);
         let ttl = info.node_tip.absolute_slot_number * 12000;
-        // console.log(minada, amounts, info, ttl);
         let coinselection = await api.walletcoinselection(id, null, amounts, data).then(x=>x).catch(x=>x)
-        // console.log('coinselection', coinselection);
-        if (Array.isArray(phrase)) phrase = phrase.join(' ')
-        else if (typeof phrase === 'string' && phrase.includes('[')) phrase = phrase.replace('[', '').replace(']', '').replace(/,/g, '')
-        else if (typeof phrase === 'string') phrase = phrase.split(',')
+        if (typeof phrase === 'string') phrase = phrase.split(',')
+
         let rootkey = api.deriverootkey(phrase)
-        // console.log('rootkey',rootkey);
         let signingkeys = coinselection.inputs.map(i => {
-            // console.log(i);
             let privatekey = api.derivekey(rootkey, i.derivation_path)
-            // console.log('privatekey', privatekey);
             return privatekey;
         });
-        // console.log('signingkeys', signingkeys);
         tokens.filter(t => t.scriptKeyPairs).forEach(t => signingkeys.push(...t.scriptKeyPairs.map(k => k.privateKey.to_raw_key())));
         let metadata = api.buildtxmeta(data)
-        // let mint = api.buildtxmint(tokens)
-        // console.log('metamint', metadata);
         coinselection.outputs = coinselection.outputs.map(output => {
             if (output.address === addresses[0].address) {
                 output.assets = tokens.map(t => {
@@ -355,29 +335,20 @@ const api = {
             }
             return output;
         });
-        // console.log('coinselection', coinselection.outputs);
         let currentfee = coinselection.inputs.reduce((acc, c) => c.amount.quantity + acc, 0)
            - coinselection.outputs.reduce((acc, c) => c.amount.quantity + acc, 0)
            - coinselection.change.reduce((acc, c) => c.amount.quantity + acc, 0);
         let change = coinselection.change.reduce((acc, c) => c.amount.quantity + acc, 0);
-        // console.log('currentfee, change', currentfee, change);
         let rawtxbody = api.buildtx(coinselection, ttl, metadata, tokens);
-        // txbody.set_mint(mint);
         let rawtx = api.sign(rawtxbody, signingkeys, metadata, scripts)
-        console.log('rawtx', rawtx);
         let fee = api.gettxfee(rawtx)
-        console.log('fee', fee);
         coinselection.change[0].amount.quantity = change - (parseInt(fee.to_str()) - currentfee);
-        // metadata = api.buildtxmeta(data);
         let txbody = api.buildtxmint(coinselection, ttl, tokens, signingkeys, data, cardanoconfig)
-        // txbody.set_mint(mint);
-        console.log('txbody', txbody);
         let tx = api.sign(txbody, signingkeys, metadata, scripts)
-        console.log('tx', tx);
         let signed = Buffer.from(tx.to_bytes()).toString('hex');
-        console.log('signed', signed);
+        console.log('signed\n', signed, '\ntx\n', tx);
         let submit = await walletserver.submitTx(signed).then(x=>x).catch(e=>e)
-        console.log('submit', submit);
+        console.log('submit', submit.response.data);
         return submit.toJSON();
     }
 }
