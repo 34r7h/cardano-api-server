@@ -6,6 +6,7 @@ const express = require('express')
 const { exec } = require("child_process")
 var cors = require('cors')
 const { WalletServer, Seed, AssetWallet, TokenWallet, AddressWallet } = require('cardano-wallet-js');
+const { config } = require('process')
 const app = express()
 app.use(cors())
 const port = 80
@@ -17,6 +18,34 @@ const portssl = 443
 // ls.stderr.on("data", data => console.log(`stderr: ${data}`))
 // ls.on('error', (error) => console.log(`error: ${error.message}`));
 // ls.on("close", code => console.log(`child process exited with code ${code}`));
+
+let cardanoconfig = { // https://hydra.iohk.io/build/6498473/download/1/testnet-shelley-genesis.json
+    "activeSlotsCoeff": 0.05,
+    "protocolParams": {
+        "protocolVersion": {
+            "minor": 0,
+            "major": 2
+        },
+        "decentralisationParam": 1,
+        "eMax": 18,
+        "extraEntropy": {
+            "tag": "NeutralNonce"
+        },
+        "maxTxSize": 16384,
+        "maxBlockBodySize": 65536,
+        "maxBlockHeaderSize": 1100,
+        "minFeeA": 44,
+        "minFeeB": 155381,
+        "minUTxOValue": 1000000,
+        "poolDeposit": 500000000,
+        "minPoolCost": 340000000,
+        "keyDeposit": 2000000,
+        "nOpt": 150,
+        "rho": 0.003,
+        "tau": 0.20,
+        "a0": 0.3
+    }
+}
 
 let docs = (() => {
     let api = {}
@@ -48,7 +77,8 @@ let docs = (() => {
     api[`get-txs`] = { example: `/get-txs?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d` }
     api[`send-payment`] = { example: `/send-payment?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d&addresses=addr_test1qzu06fxmkc5hgjxcucuhlx5rwgnphnf6cj3t4gpukp5dkyag39uppmtwkm39f95szc4km6k09ghrn78vthusckne79js6xn5dj&amounts=5555555&pass=xymbacardano&data={"sup":"world"}` }
     api[`cancel-payment`] = { example: `/cancel-payment?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d&&tx=11b880e7bb7f30badf8919446f2416d7c1f6724d8add948308afd7662161c493` }
-    api[`submit-tx`] = { example: `/submit-tx?wallet=22283c232d1d71829ce14ea3a1924c3e5c4ee522&amounts=3333333&data={"1":"transactions"}&phrase=[grow,%20doll,%20joy,%20ceiling,%20cage,%20once,%20task,%20soup,%20fitness,%20one,%20recycle,%20tower,%20shrug,%20dentist,%20fever]` }
+    api[`submit-tx`] = { example: `/submit-tx?wallet=22283c232d1d71829ce14ea3a1924c3e5c4ee522&amounts=3333333&data={"1":{"id":"love","scope":"cardano","refid":"0x"}}&phrase=grow,doll,joy,ceiling,cage,once,task,soup,fitness,one,recycle,tower,shrug,dentist,fever` }
+    api[`mint`] = {example: `/mint?id=b112d4a931cd6c51bc04ec2b54112a220e66406d&addresses=addr_test1qzu06fxmkc5hgjxcucuhlx5rwgnphnf6cj3t4gpukp5dkyag39uppmtwkm39f95szc4km6k09ghrn78vthusckne79js6xn5dj&data={"1":{"id":"love","scope":"cardano","refid":"0x"}}&name=xymbabro&maxsupply=2&phrase=grow,doll,joy,ceiling,cage,once,task,soup,fitness,one,recycle,tower,shrug,dentist,fever`}
     return api
 })()
 
@@ -71,10 +101,17 @@ const api = {
     buildscript(keyhash) { return Seed.buildSingleIssuerScript(keyhash) },
     buildtx(coins, ttl, meta, tokens) { return Seed.buildTransaction(coins, ttl, meta, tokens) },
     buildtxmeta(data) { return Seed.buildTransactionMetadata(data) },
-    buildtxmint(tokens) { return Seed.buildTransactionMint(tokens) },
+    buildtxmint(coinselection, ttl, tokens, keys, data, cardanoconfig) {
+        // console.log('building mint tx', JSON.stringify([coinselection, ttl, tokens, keys, data, cardanoconfig], null, 2));
+        console.log('coinselection', coinselection,'\nttl '+ ttl,'\ntokens '+ JSON.stringify(tokens),'\nkeys'+ JSON.stringify(keys),'\ndata '+ JSON.stringify(data),'\ncardanoconfig '+ cardanoconfig);
+        // console.log(Seed.buildTransactionWithToken(coinselection, ttl, tokens, keys, {data: data, config: cardanoconfig}))
+        console.log('building tx mint');
+        let build = Seed.buildTransactionWithToken(coinselection, ttl, tokens, [keys[1]], {data: data, config: cardanoconfig})
+        console.log('build', build);
+        return build
+    },
     scripthash(script) { return Seed.getScriptHash(script) },
     getpolicyid(scripthash) { return Seed.getPolicyId(scripthash) },
-    sign(body, keys, meta, scripts) { return Seed.sign(body, keys, meta, scripts) },
     phrase() { return Seed.generateRecoveryPhrase() }, // 15 words
     async makewallet(name, pass, phrase) {
         const walletserver = api.connect()
@@ -207,33 +244,6 @@ const api = {
         return wallet.forgetTransaction(txid)
     },
     async submittx(id, amounts, meta, phrase) {
-        let config = { // https://hydra.iohk.io/build/6498473/download/1/testnet-shelley-genesis.json
-            "activeSlotsCoeff": 0.05,
-            "protocolParams": {
-                "protocolVersion": {
-                    "minor": 0,
-                    "major": 2
-                },
-                "decentralisationParam": 1,
-                "eMax": 18,
-                "extraEntropy": {
-                    "tag": "NeutralNonce"
-                },
-                "maxTxSize": 16384,
-                "maxBlockBodySize": 65536,
-                "maxBlockHeaderSize": 1100,
-                "minFeeA": 44,
-                "minFeeB": 155381,
-                "minUTxOValue": 1000000,
-                "poolDeposit": 500000000,
-                "minPoolCost": 340000000,
-                "keyDeposit": 2000000,
-                "nOpt": 150,
-                "rho": 0.003,
-                "tau": 0.20,
-                "a0": 0.3
-            }
-        }
         let walletserver = api.connect()
         let addresses = await api.listaddresses(id).then(x => x.slice(0, 1))
         let info = await api.networkinfo().then(x => x)
@@ -241,16 +251,17 @@ const api = {
         let coinselection = await api.walletcoinselection(id, addresses, amounts, meta).then(x => x)
         if (Array.isArray(phrase)) phrase = phrase.join(' ')
         if (typeof phrase === 'string' && phrase.includes('[')) phrase = phrase.replace('[', '').replace(']', '').replace(/,/g, '')
-        let rootkey = api.derivekey(phrase)
+        else if (typeof phrase === 'string') phrase = phrase.split(',')
+        let rootkey = api.deriverootkey(phrase)
         let signingkeys = coinselection.inputs.map(i => {
-            console.log(i);
+            // console.log(i);
             let privateKey = Seed.deriveKey(rootkey, i.derivation_path).to_raw_key();
             return privateKey;
         });
         let txBody, txBuild
         if (meta !== null) {
             let metadata = Seed.buildTransactionMetadata(meta)
-            txBuild = Seed.buildTransaction(coinselection, ttl, { metadata: metadata, config: config });
+            txBuild = Seed.buildTransaction(coinselection, ttl, { metadata: metadata, config: cardanoconfig });
             txBody = Seed.sign(txBuild, signingkeys, metadata);
         } else {
             txBuild = Seed.buildTransaction(coinselection, ttl);
@@ -259,14 +270,21 @@ const api = {
         let signed = Buffer.from(txBody.to_bytes()).toString('hex');
         return await walletserver.submitTx(signed).then(x => x).catch(e => e)
     },
-    derivekey(phrase) { return Seed.deriveRootKey(phrase); },
+    derivekey(phrase, path){return Seed.deriveKey(phrase, path).to_raw_key();},
+    deriverootkey(phrase) { return Seed.deriveRootKey(phrase); },
     derivespendingkey(key, path) { return Seed.deriveKey(key, path || ['1852H', '1815H', '0H', '0', '0']).to_raw_key() },
     deriveaccountkey(key) { return Seed.deriveAccountKey(key, 0) },
     verifymessage(publickey, message, signed) {
         return Seed.verifyMessage(publickey, message, signed)
     },
+    sign(body, keys, meta, scripts) { 
+        // console.log('signing\n', body,'\n', keys,'\n', meta,'\n', scripts);
+        let sign = Seed.sign(body, [keys[1]], meta, scripts)
+        // console.log('sign', sign);
+        return sign
+    },
     signmessage(message, phrase) {
-        let rootkey = api.derivekey(phrase)
+        let rootkey = api.deriverootkey(phrase)
         let accountkey = api.deriveaccountkey(rootkey)
         const stakeprvkey = accountkey.derive(CARDANO_CHIMERIC) // chimeric
             .derive(0);
@@ -276,34 +294,54 @@ const api = {
         return api.verifymessage(publickey, message, signed);
     },
 
-    async minttoken(id, addresses, meta, name, maxsupply, phrase) {
+    async mint(id, addresses, meta, name, maxsupply, phrase) {
+        // console.log(id, '\n'+ JSON.stringify(addresses), '\n'+ JSON.stringify(meta), '\n'+ name, '\n'+ maxsupply, '\n'+ phrase)
         let walletserver = api.connect()
-        let wallet = await api.getwallet(id).then(x => x)
+        // let wallet = await api.getwallet(id).then(x => x)
         let keys = api.keys()
+        // console.log(keys, walletserver);
         let policyvkey = keys.publicKey
         let policyskey = keys.privateKey
-        let script = api.buildscript(api.keyhash(policyvkey))
+        let policyhash = await api.keyhash(policyvkey).then(x=>x).catch(x=>x)
+        // console.log('policyhash', await policyhash);
+        let script = api.buildscript(policyhash)
+        // console.log('script',script);
         let policyid = api.getpolicyid(api.scripthash(script))
+        // console.log('policy', policyid)
         let tokendata = {}
         let data = {}
         tokendata[policyid] = meta
         data[0] = tokendata
         let asset = new AssetWallet(policyid, name, maxsupply);
         let tokens = [new TokenWallet(asset, script, [keys])];
+        // console.log('tokens', tokens, JSON.stringify(data));
         let scripts = tokens.map(t => t.script);
-        let minada = Seed.getMinUtxoValueWithAssets(tokens);
+        // console.log('scripts',scripts);
+        let minada = Seed.getMinUtxoValueWithAssets([asset]);
+        // console.log('minada', minada);
         let amounts = [minada];
-        let info = api.networkinfo()
+        let info = await api.networkinfo().then(x=>x)
+        // console.log(info);
         let ttl = info.node_tip.absolute_slot_number * 12000;
-        let coinselection = api.walletcoinselection(id, addresses, amounts, data)
-        let rootkey = api.derivekey(phrase)
+        // console.log(minada, amounts, info, ttl);
+        let coinselection = await api.walletcoinselection(id, null, amounts, data).then(x=>x).catch(x=>x)
+        // console.log('coinselection', coinselection);
+        if (Array.isArray(phrase)) phrase = phrase.join(' ')
+        else if (typeof phrase === 'string' && phrase.includes('[')) phrase = phrase.replace('[', '').replace(']', '').replace(/,/g, '')
+        else if (typeof phrase === 'string') phrase = phrase.split(',')
+        let rootkey = api.deriverootkey(phrase)
+        // console.log('rootkey',rootkey);
         let signingkeys = coinselection.inputs.map(i => {
+            // console.log(i);
             let privatekey = api.derivekey(rootkey, i.derivation_path)
+            // console.log('privatekey', privatekey);
             return privatekey;
         });
+        // console.log('signingkeys', signingkeys);
         tokens.filter(t => t.scriptKeyPairs).forEach(t => signingkeys.push(...t.scriptKeyPairs.map(k => k.privateKey.to_raw_key())));
         let metadata = api.buildtxmeta(data)
-        let mint = api.buildtxmint(tokens)
+        // let mint = api.buildtxmint(tokens)
+        // console.log('metamint', metadata);
         coinselection.outputs = coinselection.outputs.map(output => {
             if (output.address === addresses[0].address) {
                 output.assets = tokens.map(t => {
@@ -317,21 +355,30 @@ const api = {
             }
             return output;
         });
+        // console.log('coinselection', coinselection.outputs);
         let currentfee = coinselection.inputs.reduce((acc, c) => c.amount.quantity + acc, 0)
-            - coinselection.outputs.reduce((acc, c) => c.amount.quantity + acc, 0)
-            - coinselection.change.reduce((acc, c) => c.amount.quantity + acc, 0);
+           - coinselection.outputs.reduce((acc, c) => c.amount.quantity + acc, 0)
+           - coinselection.change.reduce((acc, c) => c.amount.quantity + acc, 0);
         let change = coinselection.change.reduce((acc, c) => c.amount.quantity + acc, 0);
-        let txbody = api.buildtx(coinselection, ttl, metadata, tokens);
-        txbody.set_mint(mint);
-        let tx = api.sign(txbody, signingkeys, metadata, scripts)
-        let fee = api.gettxfee(tx)
+        // console.log('currentfee, change', currentfee, change);
+        let rawtxbody = api.buildtx(coinselection, ttl, metadata, tokens);
+        // txbody.set_mint(mint);
+        let rawtx = api.sign(rawtxbody, signingkeys, metadata, scripts)
+        console.log('rawtx', rawtx);
+        let fee = api.gettxfee(rawtx)
+        console.log('fee', fee);
         coinselection.change[0].amount.quantity = change - (parseInt(fee.to_str()) - currentfee);
-        metadata = api.buildtxmeta(data);
-        txbody = api.buildtx(coinselection, ttl, metadata, tokens)
-        txbody.set_mint(mint);
-        tx = api.sign(txbody, signingkeys, metadata, scripts)
+        // metadata = api.buildtxmeta(data);
+        let txbody = api.buildtxmint(coinselection, ttl, tokens, signingkeys, data, cardanoconfig)
+        // txbody.set_mint(mint);
+        console.log('txbody', txbody);
+        let tx = api.sign(txbody, signingkeys, metadata, scripts)
+        console.log('tx', tx);
         let signed = Buffer.from(tx.to_bytes()).toString('hex');
-        return await walletserver.submitTx(signed);
+        console.log('signed', signed);
+        let submit = await walletserver.submitTx(signed).then(x=>x).catch(e=>e)
+        console.log('submit', submit);
+        return submit.toJSON();
     }
 }
 
@@ -497,160 +544,12 @@ app.get('/submit-tx', async (req, res) => {
     res.send(JSON.stringify(submittx))
     return submittx
 })
-app.get('/cardano', async (req, res) => {
-    let a = (async () => {
-        let walletServer = api.connect()
-
-        let information = await walletServer.getNetworkInformation();
-        console.log('\nBlockchain Information', api.networkinfo().then(d => d));
-
-        let parameters = await walletServer.getNetworkParameters();
-        console.log('\nBlockchain Parameters', parameters);
-
-        let clock = await walletServer.getNetworkClock();
-        console.log('\nBlockchain Clock', clock);
-
-        let recoveryPhrase = Seed.generateRecoveryPhrase();
-        let mnemonic_sentence = Seed.toMnemonicList(recoveryPhrase);
-        console.log('\nRecovery Phrase', recoveryPhrase, mnemonic_sentence)
-        let passphrase = 'xymbaxymba';
-        let name = 'xymba-wallet';
-        let wallet = await walletServer.createOrRestoreShelleyWallet(name, mnemonic_sentence, passphrase);
-
-        let wallets = await walletServer.wallets();
-        let xymbawallet = wallets[0]
-        console.log('\nXymba Wallet Info', '\n Balance', xymbawallet.getAvailableBalance(), xymbawallet.id, Object.keys(xymbawallet))
-
-        let addresses = await xymbawallet.getAddresses(); // list will contain at least 20 address
-        console.log('\nAddresses', addresses.length, addresses[0])
-
-        // address to hold the minted tokens. You can use which you want.
-        addresses = [addresses[0]];
-
-        // policy public/private keypair
-        let keyPair = api.keys();
-        let policyVKey = keyPair.publicKey;
-        let policySKey = keyPair.privateKey;
-
-        console.log('policy keys', { policyVKey, policySKey });
-
-        // generate single issuer native script
-
-        let keyHash = Seed.getKeyHash(policyVKey);
-        let script = Seed.buildSingleIssuerScript(keyHash);
-
-        //generate policy id
-
-        let scriptHash = Seed.getScriptHash(script);
-        let policyId = Seed.getPolicyId(scriptHash);
-
-        // metadata
-        let data = {};
-        let tokenData = {}
-        tokenData[policyId] = {
-            XYMBA: {
-                types: "00-ff",
-                vid: "1.1.1",
-                name: "Xymba",
-                description: "Cosmic Psychedelic Tokens",
-                type: "Token"
-            }
-        };
-        data[0] = tokenData;
-        // asset
-        let asset = new AssetWallet(policyId, "XYMBA", 1000000);
-        console.log('asset', asset);
-
-        // token
-        let tokens = [new TokenWallet(asset, script, [keyPair])];
-        console.log('tokens', tokens);
-
-        //scripts
-        let scripts = tokens.map(t => t.script);
-
-        // get min ada for address holding tokens
-        let minAda = Seed.getMinUtxoValueWithAssets(tokens);
-        let amount = [minAda];
-        console.log('amounts', amount);
-
-        // get ttl info
-        //  let info = await walletServer.getNetworkInformation();
-        let ttl = information.node_tip.absolute_slot_number * 12000;
-
-        console.log('ttl', ttl);
-        // get coin selection structure (without the assets)
-        let coinSelection = await xymbawallet.getCoinSelection(addresses, amounts, data).then(x => x).catch(e => e);
-        console.log('coinSelection', coinSelection.response.status, coinSelection.response.data);
-
-        // add signing keys
-        let rootKey = Seed.deriveRootKey('tank kind bike insect sister legend gown lava clinic music bid opera daring switch salmon');
-        if (!coinSelection.inputs) return { information, xymbawallet, addresses, asset, tokens }
-        let signingKeys = coinSelection.inputs.map(i => {
-            let privateKey = Seed.deriveKey(rootKey, i.derivation_path).to_raw_key();
-            return privateKey;
-        });
-
-        // add policy signing keys
-        tokens.filter(t => t.scriptKeyPairs).forEach(t => signingKeys.push(...t.scriptKeyPairs.map(k => k.privateKey.to_raw_key())));
-
-        let metadata = Seed.buildTransactionMetadata(data);
-        let mint = Seed.buildTransactionMint(tokens);
-
-        // the wallet currently doesn't support including tokens not previuosly minted
-        // so we need to include it manually.
-        coinSelection.outputs = coinSelection.outputs.map(output => {
-            if (output.address === addresses[0].address) {
-                output.assets = tokens.map(t => {
-                    let absolute_slot_number = {
-                        policy_id: t.asset.policy_id,
-                        asset_name: t.asset.asset_name,
-                        quantity: t.asset.quantity
-                    };
-                    return asset;
-                });
-            }
-            return output;
-        });
-
-        let currentFee = coinSelection.inputs.reduce((acc, c) => c.amount.quantity + acc, 0)
-            - coinSelection.outputs.reduce((acc, c) => c.amount.quantity + acc, 0)
-            - coinSelection.change.reduce((acc, c) => c.amount.quantity + acc, 0);
-        let change = coinSelection.change.reduce((acc, c) => c.amount.quantity + acc, 0);
-
-        // we need to sing the tx and calculate the actual fee and the build again 
-        // since the coin selection doesnt calculate the fee with the asset tokens included
-        let txBody = Seed.buildTransaction(coinSelection, ttl, metadata, tokens);
-        txBody.set_mint(mint);
-        let tx = Seed.sign(txBody, signingKeys, metadata, scripts);
-        let fee = Seed.getTransactionFee(tx);
-        coinSelection.change[0].amount.quantity = change - (parseInt(fee.to_str()) - currentFee);
-
-        // after tx signed the metadata is cleaned, so we need to build it again.
-        metadata = Seed.buildTransactionMetadata(data);
-
-        // finally build the tx again and sing it
-        txBody = Seed.buildTransaction(coinSelection, ttl, metadata, tokens);
-        txBody.set_mint(mint);
-        tx = Seed.sign(txBody, signingKeys, metadata, scripts);
-
-        // submit the tx
-        let signed = Buffer.from(tx.to_bytes()).toString('hex');
-        let txId = await walletServer.submitTx(signed);
-        console.log('txId', txId)
-
-        return information
-
-    })()
-    let cardano = async () => await a.then(x => JSON.stringify(x, null, 2))
-    let resdata = cardano()
-    console.log(resdata)
-    res.send(await resdata)
+app.get('/mint', async (req, res)=>{
+    // id, addresses, data, name, maxsupply, phrase
+    let mint = await api.mint(req.query.id, req.query.addresses && req.query.addresses.split(',').map(y => new AddressWallet(y)), req.query.data ? JSON.parse(req.query.data) : null, req.query.name, req.query.maxsupply, req.query.phrase).then(x=>x).catch(e=>e)
+    res.send(JSON.stringify(mint))
 })
-app.get('/test', async (req, res) => {
-    let key = ''
-    console.log(api.keyhash(api.keys()[1]));
-    res.send('ok')
-})
+
 http.createServer(app).listen(port, () => {
     console.log(`Example app listening at http://shwifty.io/`)
 })
