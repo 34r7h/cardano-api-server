@@ -9,10 +9,10 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "cardano-wallet-js": "^1.2.2",
+    "cardano-wallet-js": "^1.2.3",
     "cors": "^2.8.5",
     "express": "^4.17.1",
     "http-proxy": "^1.18.1",
-    "node-fetch": "^2.6.1"
+    "node-fetch": "^2.6.5"
   }
 }
