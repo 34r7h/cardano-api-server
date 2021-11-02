@@ -1,10 +1,12 @@
 var fs = require('fs')
+
 var http = require('http')
 var https = require('https')
 // const fetch = require('node-fetch')
 const express = require('express')
 const { exec } = require("child_process")
 var cors = require('cors')
+var qr = require('qrcode')
 const { WalletServer, Seed, AssetWallet, TokenWallet, AddressWallet } = require('cardano-wallet-js');
 const { config } = require('process')
 const app = express()
@@ -51,205 +53,79 @@ if (testnet) {
     }
 } else {
     cconfig = {
-        "lovelacePerUTxOWord": 34482,
-        "executionPrices": {
-            "prSteps":
-            {
-                "numerator": 721,
-                "denominator": 10000000
+        "activeSlotsCoeff": 0.05,
+        "protocolParams": {
+            "protocolVersion": {
+                "minor": 0,
+                "major": 2
             },
-            "prMem":
-            {
-                "numerator": 577,
-                "denominator": 10000
+            "decentralisationParam": 1,
+            "eMax": 18,
+            "extraEntropy": {
+                "tag": "NeutralNonce"
+            },
+            "maxTxSize": 16384,
+            "maxBlockBodySize": 65536,
+            "maxBlockHeaderSize": 1100,
+            "minFeeA": 44,
+            "minFeeB": 155381,
+            "minUTxOValue": 1000000,
+            "poolDeposit": 500000000,
+            "minPoolCost": 340000000,
+            "keyDeposit": 2000000,
+            "nOpt": 150,
+            "rho": 0.003,
+            "tau": 0.20,
+            "a0": 0.3
+        },
+        "genDelegs": {
+            "ad5463153dc3d24b9ff133e46136028bdc1edbb897f5a7cf1b37950c": {
+                "delegate": "d9e5c76ad5ee778960804094a389f0b546b5c2b140a62f8ec43ea54d",
+                "vrf": "64fa87e8b29a5b7bfbd6795677e3e878c505bc4a3649485d366b50abadec92d7"
+            },
+            "b9547b8a57656539a8d9bc42c008e38d9c8bd9c8adbb1e73ad529497": {
+                "delegate": "855d6fc1e54274e331e34478eeac8d060b0b90c1f9e8a2b01167c048",
+                "vrf": "66d5167a1f426bd1adcc8bbf4b88c280d38c148d135cb41e3f5a39f948ad7fcc"
+            },
+            "60baee25cbc90047e83fd01e1e57dc0b06d3d0cb150d0ab40bbfead1": {
+                "delegate": "7f72a1826ae3b279782ab2bc582d0d2958de65bd86b2c4f82d8ba956",
+                "vrf": "c0546d9aa5740afd569d3c2d9c412595cd60822bb6d9a4e8ce6c43d12bd0f674"
+            },
+            "f7b341c14cd58fca4195a9b278cce1ef402dc0e06deb77e543cd1757": {
+                "delegate": "69ae12f9e45c0c9122356c8e624b1fbbed6c22a2e3b4358cf0cb5011",
+                "vrf": "6394a632af51a32768a6f12dac3485d9c0712d0b54e3f389f355385762a478f2"
+            },
+            "162f94554ac8c225383a2248c245659eda870eaa82d0ef25fc7dcd82": {
+                "delegate": "4485708022839a7b9b8b639a939c85ec0ed6999b5b6dc651b03c43f6",
+                "vrf": "aba81e764b71006c515986bf7b37a72fbb5554f78e6775f08e384dbd572a4b32"
+            },
+            "2075a095b3c844a29c24317a94a643ab8e22d54a3a3a72a420260af6": {
+                "delegate": "6535db26347283990a252313a7903a45e3526ec25ddba381c071b25b",
+                "vrf": "fcaca997b8105bd860876348fc2c6e68b13607f9bbd23515cd2193b555d267af"
+            },
+            "268cfc0b89e910ead22e0ade91493d8212f53f3e2164b2e4bef0819b": {
+                "delegate": "1d4f2e1fda43070d71bb22a5522f86943c7c18aeb4fa47a362c27e23",
+                "vrf": "63ef48bc5355f3e7973100c371d6a095251c80ceb40559f4750aa7014a6fb6db"
             }
         },
-        "maxTxExUnits": {
-            "exUnitsMem": 10000000,
-            "exUnitsSteps": 10000000000
-        },
-        "maxBlockExUnits": {
-            "exUnitsMem": 50000000,
-            "exUnitsSteps": 40000000000
-        },
-        "maxValueSize": 5000,
-        "collateralPercentage": 150,
-        "maxCollateralInputs": 3,
-        "costModels": {
-            "PlutusV1": {
-                "sha2_256-memory-arguments": 4,
-                "equalsString-cpu-arguments-constant": 1000,
-                "cekDelayCost-exBudgetMemory": 100,
-                "lessThanEqualsByteString-cpu-arguments-intercept": 103599,
-                "divideInteger-memory-arguments-minimum": 1,
-                "appendByteString-cpu-arguments-slope": 621,
-                "blake2b-cpu-arguments-slope": 29175,
-                "iData-cpu-arguments": 150000,
-                "encodeUtf8-cpu-arguments-slope": 1000,
-                "unBData-cpu-arguments": 150000,
-                "multiplyInteger-cpu-arguments-intercept": 61516,
-                "cekConstCost-exBudgetMemory": 100,
-                "nullList-cpu-arguments": 150000,
-                "equalsString-cpu-arguments-intercept": 150000,
-                "trace-cpu-arguments": 150000,
-                "mkNilData-memory-arguments": 32,
-                "lengthOfByteString-cpu-arguments": 150000,
-                "cekBuiltinCost-exBudgetCPU": 29773,
-                "bData-cpu-arguments": 150000,
-                "subtractInteger-cpu-arguments-slope": 0,
-                "unIData-cpu-arguments": 150000,
-                "consByteString-memory-arguments-intercept": 0,
-                "divideInteger-memory-arguments-slope": 1,
-                "divideInteger-cpu-arguments-model-arguments-slope": 118,
-                "listData-cpu-arguments": 150000,
-                "headList-cpu-arguments": 150000,
-                "chooseData-memory-arguments": 32,
-                "equalsInteger-cpu-arguments-intercept": 136542,
-                "sha3_256-cpu-arguments-slope": 82363,
-                "sliceByteString-cpu-arguments-slope": 5000,
-                "unMapData-cpu-arguments": 150000,
-                "lessThanInteger-cpu-arguments-intercept": 179690,
-                "mkCons-cpu-arguments": 150000,
-                "appendString-memory-arguments-intercept": 0,
-                "modInteger-cpu-arguments-model-arguments-slope": 118,
-                "ifThenElse-cpu-arguments": 1,
-                "mkNilPairData-cpu-arguments": 150000,
-                "lessThanEqualsInteger-cpu-arguments-intercept": 145276,
-                "addInteger-memory-arguments-slope": 1,
-                "chooseList-memory-arguments": 32,
-                "constrData-memory-arguments": 32,
-                "decodeUtf8-cpu-arguments-intercept": 150000,
-                "equalsData-memory-arguments": 1,
-                "subtractInteger-memory-arguments-slope": 1,
-                "appendByteString-memory-arguments-intercept": 0,
-                "lengthOfByteString-memory-arguments": 4,
-                "headList-memory-arguments": 32,
-                "listData-memory-arguments": 32,
-                "consByteString-cpu-arguments-intercept": 150000,
-                "unIData-memory-arguments": 32,
-                "remainderInteger-memory-arguments-minimum": 1,
-                "bData-memory-arguments": 32,
-                "lessThanByteString-cpu-arguments-slope": 248,
-                "encodeUtf8-memory-arguments-intercept": 0,
-                "cekStartupCost-exBudgetCPU": 100,
-                "multiplyInteger-memory-arguments-intercept": 0,
-                "unListData-memory-arguments": 32,
-                "remainderInteger-cpu-arguments-model-arguments-slope": 118,
-                "cekVarCost-exBudgetCPU": 29773,
-                "remainderInteger-memory-arguments-slope": 1,
-                "cekForceCost-exBudgetCPU": 29773,
-                "sha2_256-cpu-arguments-slope": 29175,
-                "equalsInteger-memory-arguments": 1,
-                "indexByteString-memory-arguments": 1,
-                "addInteger-memory-arguments-intercept": 1,
-                "chooseUnit-cpu-arguments": 150000,
-                "sndPair-cpu-arguments": 150000,
-                "cekLamCost-exBudgetCPU": 29773,
-                "fstPair-cpu-arguments": 150000,
-                "quotientInteger-memory-arguments-minimum": 1,
-                "decodeUtf8-cpu-arguments-slope": 1000,
-                "lessThanInteger-memory-arguments": 1,
-                "lessThanEqualsInteger-cpu-arguments-slope": 1366,
-                "fstPair-memory-arguments": 32,
-                "modInteger-memory-arguments-intercept": 0,
-                "unConstrData-cpu-arguments": 150000,
-                "lessThanEqualsInteger-memory-arguments": 1,
-                "chooseUnit-memory-arguments": 32,
-                "sndPair-memory-arguments": 32,
-                "addInteger-cpu-arguments-intercept": 197209,
-                "decodeUtf8-memory-arguments-slope": 8,
-                "equalsData-cpu-arguments-intercept": 150000,
-                "mapData-cpu-arguments": 150000,
-                "mkPairData-cpu-arguments": 150000,
-                "quotientInteger-cpu-arguments-constant": 148000,
-                "consByteString-memory-arguments-slope": 1,
-                "cekVarCost-exBudgetMemory": 100,
-                "indexByteString-cpu-arguments": 150000,
-                "unListData-cpu-arguments": 150000,
-                "equalsInteger-cpu-arguments-slope": 1326,
-                "cekStartupCost-exBudgetMemory": 100,
-                "subtractInteger-cpu-arguments-intercept": 197209,
-                "divideInteger-cpu-arguments-model-arguments-intercept": 425507,
-                "divideInteger-memory-arguments-intercept": 0,
-                "cekForceCost-exBudgetMemory": 100,
-                "blake2b-cpu-arguments-intercept": 2477736,
-                "remainderInteger-cpu-arguments-constant": 148000,
-                "tailList-cpu-arguments": 150000,
-                "encodeUtf8-cpu-arguments-intercept": 150000,
-                "equalsString-cpu-arguments-slope": 1000,
-                "lessThanByteString-memory-arguments": 1,
-                "multiplyInteger-cpu-arguments-slope": 11218,
-                "appendByteString-cpu-arguments-intercept": 396231,
-                "lessThanEqualsByteString-cpu-arguments-slope": 248,
-                "modInteger-memory-arguments-slope": 1,
-                "addInteger-cpu-arguments-slope": 0,
-                "equalsData-cpu-arguments-slope": 10000,
-                "decodeUtf8-memory-arguments-intercept": 0,
-                "chooseList-cpu-arguments": 150000,
-                "constrData-cpu-arguments": 150000,
-                "equalsByteString-memory-arguments": 1,
-                "cekApplyCost-exBudgetCPU": 29773,
-                "quotientInteger-memory-arguments-slope": 1,
-                "verifySignature-cpu-arguments-intercept": 3345831,
-                "unMapData-memory-arguments": 32,
-                "mkCons-memory-arguments": 32,
-                "sliceByteString-memory-arguments-slope": 1,
-                "sha3_256-memory-arguments": 4,
-                "ifThenElse-memory-arguments": 1,
-                "mkNilPairData-memory-arguments": 32,
-                "equalsByteString-cpu-arguments-slope": 247,
-                "appendString-cpu-arguments-intercept": 150000,
-                "quotientInteger-cpu-arguments-model-arguments-slope": 118,
-                "cekApplyCost-exBudgetMemory": 100,
-                "equalsString-memory-arguments": 1,
-                "multiplyInteger-memory-arguments-slope": 1,
-                "cekBuiltinCost-exBudgetMemory": 100,
-                "remainderInteger-memory-arguments-intercept": 0,
-                "sha2_256-cpu-arguments-intercept": 2477736,
-                "remainderInteger-cpu-arguments-model-arguments-intercept": 425507,
-                "lessThanEqualsByteString-memory-arguments": 1,
-                "tailList-memory-arguments": 32,
-                "mkNilData-cpu-arguments": 150000,
-                "chooseData-cpu-arguments": 150000,
-                "unBData-memory-arguments": 32,
-                "blake2b-memory-arguments": 4,
-                "iData-memory-arguments": 32,
-                "nullList-memory-arguments": 32,
-                "cekDelayCost-exBudgetCPU": 29773,
-                "subtractInteger-memory-arguments-intercept": 1,
-                "lessThanByteString-cpu-arguments-intercept": 103599,
-                "consByteString-cpu-arguments-slope": 1000,
-                "appendByteString-memory-arguments-slope": 1,
-                "trace-memory-arguments": 32,
-                "divideInteger-cpu-arguments-constant": 148000,
-                "cekConstCost-exBudgetCPU": 29773,
-                "encodeUtf8-memory-arguments-slope": 8,
-                "quotientInteger-cpu-arguments-model-arguments-intercept": 425507,
-                "mapData-memory-arguments": 32,
-                "appendString-cpu-arguments-slope": 1000,
-                "modInteger-cpu-arguments-constant": 148000,
-                "verifySignature-cpu-arguments-slope": 1,
-                "unConstrData-memory-arguments": 32,
-                "quotientInteger-memory-arguments-intercept": 0,
-                "equalsByteString-cpu-arguments-constant": 150000,
-                "sliceByteString-memory-arguments-intercept": 0,
-                "mkPairData-memory-arguments": 32,
-                "equalsByteString-cpu-arguments-intercept": 112536,
-                "appendString-memory-arguments-slope": 1,
-                "lessThanInteger-cpu-arguments-slope": 497,
-                "modInteger-cpu-arguments-model-arguments-intercept": 425507,
-                "modInteger-memory-arguments-minimum": 1,
-                "sha3_256-cpu-arguments-intercept": 0,
-                "verifySignature-memory-arguments": 1,
-                "cekLamCost-exBudgetMemory": 100,
-                "sliceByteString-cpu-arguments-intercept": 150000
-            }
-        }
+        "updateQuorum": 5,
+        "networkId": "Mainnet",
+        "initialFunds": {},
+        "maxLovelaceSupply": 45000000000000000,
+        "networkMagic": 764824073,
+        "epochLength": 432000,
+        "systemStart": "2017-09-23T21:44:51Z",
+        "slotsPerKESPeriod": 129600,
+        "slotLength": 1,
+        "maxKESEvolutions": 62,
+        "securityParam": 2160
     }
 }
 const cardanoconfig = cconfig
 let docs = (() => {
     let api = {}
+    api[`docs`] = { example: `/docs` }
+    api[`qr`] = { example: `/qr?address=addr1q87cmda6w8dvvqpt7m3t3wpqvucn0jyap2g484dhxe7x72d7fv9x2q6avt5qk480fev7uq5dkhq6q2qu006uu5tlt8ysgzmdy3&amount=1` }
     api[`network`] = { example: `/network` }
     api[`network-info`] = { example: `/network-info` }
     api['keys'] = { example: `/keys` }
@@ -303,11 +179,11 @@ const api = {
     buildtxmeta(data) { return Seed.buildTransactionMetadata(data) },
     buildtxmint(coinselection, ttl, tokens, keys, data) {
         // console.log('building mint tx', JSON.stringify([coinselection, ttl, tokens, keys, data, cardanoconfig], null, 2));
-        console.log('building tx mint\n',{coinselection, ttl, tokens, keys, data});
+        // console.log('building tx mint\n', { coinselection, ttl, tokens, keys, data });
         // console.log(Seed.buildTransactionWithToken(coinselection, ttl, tokens, keys, {data: data, config: cardanoconfig}))
-        console.log('building tx mint', keys);
+        // console.log('building tx mint', keys);
         let build = Seed.buildTransactionWithToken(coinselection, ttl, tokens, keys, { data: data, config: cardanoconfig })
-        console.log({build});
+        console.log('build', { build });
         return build
     },
     scripthash(script) { return Seed.getScriptHash(script) },
@@ -435,7 +311,7 @@ const api = {
         return await wallet.getTransactions(start, end);
     },
     async sendpayment(id, addresses, amounts, pass, meta) {
-        console.log({id, addresses, amounts, pass, meta}, await api.getwallet(id).then(x=>x).catch(e => e));
+        console.log({ id, addresses, amounts, pass, meta }, await api.getwallet(id).then(x => x).catch(e => e));
         let wallet = await api.getwallet(id).then(x => x).catch(e => e)
         console.log(wallet);
         return await wallet.sendPayment(pass, addresses, amounts, meta).then(x => x).catch(e => e);
@@ -470,6 +346,7 @@ const api = {
             txBody = Seed.sign(txBuild, signingkeys);
         }
         let signed = Buffer.from(txBody.to_bytes()).toString('hex');
+        console.log(signed);
         return await walletserver.submitTx(signed).then(x => x).catch(e => e)
     },
     derivekey(phrase, path) { return Seed.deriveKey(phrase, path).to_raw_key(); },
@@ -497,40 +374,85 @@ const api = {
     },
 
     async mint(id, addresses, meta, name, maxsupply, phrase) {
+        // address to hold the minted tokens. You can use which you want.
+        console.log({...arguments})
+        return {id, addresses, meta, name, maxsupply, phrase}
         let walletserver = api.connect()
-        let keys = api.keys()
-        let policyvkey = keys.publicKey
-        let policyskey = keys.privateKey
-        let policyhash = await api.keyhash(policyvkey).then(x => x).catch(x => x)
-        let script = api.buildscript(policyhash)
-        let policyid = api.getpolicyid(api.scripthash(script))
-        let tokendata = {}
-        let data = {}
-        tokendata[policyid] = meta
-        data[0] = tokendata
-        let asset = new AssetWallet(policyid, name, maxsupply);
-        let tokens = [new TokenWallet(asset, script, [keys])];
-        let scripts = tokens.map(t => t.script);
-        let minada = Seed.getMinUtxoValueWithAssets([asset]);
-        let amounts = [minada];
-        let info = await api.networkinfo().then(x => x)
-        let ttl = info.node_tip.absolute_slot_number * 12000;
-        let coinselection = await api.walletcoinselection(id, null, amounts, data).then(x => x).catch(x => x)
-        if (typeof phrase === 'string') phrase = phrase.split(',')
+        let wallet = await api.getwallet(id).then(x => x)
+        addresses = addresses || [(await wallet.getAddresses())[0]];
 
-        let rootkey = api.deriverootkey(phrase)
-        let signingkeys = coinselection.inputs.map(i => {
-            let privatekey = api.derivekey(rootkey, i.derivation_path)
-            return privatekey;
+        // blockchain config, this is where you can find protocol params, slotsPerKESPeriod etc.
+        // This lib comes with  Mainnet, Testnet and LocalCluster config (Config.Mainnet, Config.Testnet and Config.LocalCluster), but you may consider provide your own to make sure they are up to date.
+        // You can find the latest config files here: https://hydra.iohk.io/build/6498473/download/1/index.html
+        // let config = { ..., "protocolParams": {... "minFeeA": 44, ..., "minFeeB": 155381, ...} }
+
+        // policy public/private keypair
+        let keyPair = Seed.generateKeyPair();
+        let policyVKey = keyPair.publicKey;
+        let policySKey = keyPair.privateKey;
+
+        // generate single issuer native script
+        let keyHash = Seed.getKeyHash(policyVKey);
+        let script = Seed.buildSingleIssuerScript(keyHash);
+
+        //generate policy id
+        let scriptHash = Seed.getScriptHash(script);
+        let policyId = Seed.getPolicyId(scriptHash);
+
+        // metadata
+        let data = {};
+        let tokenData = {}
+        tokenData[policyId] = {
+            1: {
+                name: "xymba",
+                description: "Xymba file token",
+                type: "File token",
+                id: "sob jawbkreb kjqbwr",
+                xymbatoken: "9c943e53c378425b17e5de08e93858afd95d67e713bd7e74e1c66a826cf6b066",
+                xymbatype: "file"
+            }
+        };
+        data[0] = tokenData;
+
+        // asset
+        let asset = new AssetWallet(policyId, "XymbolPrototype1", 2);
+
+        // token
+        let tokens = [new TokenWallet(asset, script, [keyPair])];
+
+        //scripts
+        let scripts = tokens.map(t => t.script);
+
+        // get min ada for address holding tokens
+        let minAda = Seed.getMinUtxoValueWithAssets([asset], cconfig);
+        let amounts = [minAda];
+
+        // get ttl info
+        let info = await walletserver.getNetworkInformation();
+        let ttl = info.node_tip.absolute_slot_number * 12000;
+        // get coin selection structure (without the assets)
+        let coinSelection = await wallet.getCoinSelection(addresses, amounts, data);
+
+        // add signing keys
+        let rootKey = Seed.deriveRootKey(phrase.split(','));
+        let signingKeys = coinSelection.inputs.map(i => {
+            let privateKey = Seed.deriveKey(rootKey, i.derivation_path).to_raw_key();
+            return privateKey;
         });
-        tokens.filter(t => t.scriptKeyPairs).forEach(t => signingkeys.push(...t.scriptKeyPairs.map(k => k.privateKey.to_raw_key())));
-        let metadata = api.buildtxmeta(data)
-        coinselection.outputs = coinselection.outputs.map(output => {
+
+        // add policy signing keys
+        tokens.filter(t => t.scriptKeyPairs).forEach(t => signingKeys.push(...t.scriptKeyPairs.map(k => k.privateKey.to_raw_key())));
+
+        let metadata = Seed.buildTransactionMetadata(data);
+
+        // the wallet currently doesn't support including tokens not previuosly minted
+        // so we need to include it manually.
+        coinSelection.outputs = coinSelection.outputs.map(output => {
             if (output.address === addresses[0].address) {
                 output.assets = tokens.map(t => {
                     let asset = {
                         policy_id: t.asset.policy_id,
-                        asset_name: t.asset.asset_name,
+                        asset_name: Buffer.from(t.asset.asset_name).toString('hex'),
                         quantity: t.asset.quantity
                     };
                     return asset;
@@ -538,23 +460,80 @@ const api = {
             }
             return output;
         });
-        let currentfee = coinselection.inputs.reduce((acc, c) => c.amount.quantity + acc, 0)
-            - coinselection.outputs.reduce((acc, c) => c.amount.quantity + acc, 0)
-            - coinselection.change.reduce((acc, c) => c.amount.quantity + acc, 0);
-        let change = coinselection.change.reduce((acc, c) => c.amount.quantity + acc, 0);
-        let rawtxbody = api.buildtx(coinselection, ttl, metadata, tokens);
-        let rawtx = api.sign(rawtxbody, signingkeys, metadata, scripts)
-        let fee = api.gettxfee(rawtx)
-        coinselection.change[0].amount.quantity = change - (parseInt(fee.to_str()) - currentfee);
-        console.log({coinselection, ttl, tokens, signingkeys, data, cardanoconfig});
-        let txbody = await api.buildtxmint(coinselection, ttl, tokens, signingkeys, data, cardanoconfig).then(x=>x).catch(e=>e)
-        console.log(txbody);
-        let tx = api.sign(txbody, signingkeys, metadata, scripts)
+
+        // we need to sing the tx and calculate the actual fee and the build again 
+        // since the coin selection doesnt calculate the fee with the asset tokens included
+        let txBody = Seed.buildTransactionWithToken(coinSelection, ttl, tokens, signingKeys, { data: data, config: cconfig });
+        let tx = Seed.sign(txBody, signingKeys, metadata, scripts);
+
+        // submit the tx	
         let signed = Buffer.from(tx.to_bytes()).toString('hex');
-        console.log('signed\n', signed, '\ntx\n', tx);
-        let submit = await walletserver.submitTx(signed).then(x => x).catch(e => e)
-        console.log('submit', submit.response.data);
-        return submit.toJSON();
+        console.log(1, { signed, tx, txBody, metadata, signingKeys, rootKey, coinSelection });
+        let txId = await walletserver.submitTx(signed);
+        // let txId = await api.submittx(signed).then(x => x).catch(e => { return { signed, tx, txBody, metadata, signingKeys, rootKey, coinSelection, wallet, e: e.response.data } });
+
+        console.log({ txId }, api.submittx(signed))
+        return txId
+        /* {
+            let walletserver = api.connect()
+            let keys = api.keys()
+            let policyvkey = keys.publicKey
+            let policyskey = keys.privateKey
+            let policyhash = await api.keyhash(policyvkey).then(x => x).catch(x => x)
+            let script = api.buildscript(policyhash)
+            let policyid = api.getpolicyid(api.scripthash(script))
+            let tokendata = {}
+            let data = {}
+            tokendata[policyid] = meta
+            data[0] = tokendata
+            let asset = new AssetWallet(policyid, name, maxsupply);
+            let tokens = [new TokenWallet(asset, script, [keys])];
+            let scripts = tokens.map(t => t.script);
+            let minada = Seed.getMinUtxoValueWithAssets([asset]);
+            let amounts = [minada];
+            let info = await api.networkinfo().then(x => x)
+            let ttl = info.node_tip.absolute_slot_number * 12000;
+            let coinselection = await api.walletcoinselection(id, null, amounts, data).then(x => x).catch(x => x)
+            if (typeof phrase === 'string') phrase = phrase.split(',')
+
+            let rootkey = api.deriverootkey(phrase)
+            let signingkeys = coinselection.inputs.map(i => {
+                let privatekey = api.derivekey(rootkey, i.derivation_path)
+                return privatekey;
+            });
+            tokens.filter(t => t.scriptKeyPairs).forEach(t => signingkeys.push(...t.scriptKeyPairs.map(k => k.privateKey.to_raw_key())));
+            let metadata = api.buildtxmeta(data)
+            coinselection.outputs = coinselection.outputs.map(output => {
+                if (output.address === addresses[0].address) {
+                    output.assets = tokens.map(t => {
+                        let asset = {
+                            policy_id: t.asset.policy_id,
+                            asset_name: t.asset.asset_name,
+                            quantity: t.asset.quantity
+                        };
+                        return asset;
+                    });
+                }
+                return output;
+            });
+            let currentfee = coinselection.inputs.reduce((acc, c) => c.amount.quantity + acc, 0)
+                - coinselection.outputs.reduce((acc, c) => c.amount.quantity + acc, 0)
+                - coinselection.change.reduce((acc, c) => c.amount.quantity + acc, 0);
+            let change = coinselection.change.reduce((acc, c) => c.amount.quantity + acc, 0);
+            let rawtxbody = api.buildtx(coinselection, ttl, metadata, tokens);
+            let rawtx = api.sign(rawtxbody, signingkeys, metadata, scripts)
+            let fee = api.gettxfee(rawtx)
+            coinselection.change[0].amount.quantity = change - (parseInt(fee.to_str()) - currentfee);
+            // console.log({ coinselection, ttl, tokens, signingkeys, data, cardanoconfig });
+            let txbody = api.buildtxmint(coinselection, ttl, tokens, signingkeys, data, cardanoconfig)
+            console.log({ txbody });
+            let tx = api.sign(txbody, signingkeys, metadata, scripts)
+            let signed = Buffer.from(tx.to_bytes()).toString('hex');
+            console.log('signed\n', signed, '\ntx\n', tx);
+            let submit = await walletserver.submitTx(signed).then(x => x).catch(e => e)
+            console.log('submit', submit.response.data);
+            return submit.toJSON();
+        } */
     }
 }
 
@@ -569,11 +548,20 @@ app.get('/', (req, res) => {
     return res.send(obj + '</ul>')
 })
 
+app.get('/docs', (req, res) => res.send(JSON.stringify(docs, null, 4)))
+
+app.get('/qr', (req, res) => {
+    let gurl = `web+cardano:${req.query.address}?amount=${req.query.amount}`
+    return qr.toDataURL(gurl, function (err, img) {
+        let html = `<img src="${img}"/><p style="overflow-wrap: anywhere;">${gurl}</p>`
+        res.send(html)
+        return html
+    })
+})
 app.get('/network', (req, res) => res.send(JSON.stringify(api.connect())))
 app.get('/network-info', async (req, res) => {
     console.log(api.networkinfo, Object.keys(req))
     let ni = await api.networkinfo().then(d => d).catch(e => e)
-    console.log('ni', ni)
     res.send(JSON.stringify(ni))
     return ni
 })
@@ -727,7 +715,8 @@ app.get('/submit-tx', async (req, res) => {
 app.get('/mint', async (req, res) => {
     // id, addresses, data, name, maxsupply, phrase
     let mint = await api.mint(req.query.id, req.query.addresses && req.query.addresses.split(',').map(y => new AddressWallet(y)), req.query.data ? JSON.parse(req.query.data) : null, req.query.name, req.query.maxsupply, req.query.phrase).then(x => x).catch(e => e)
-    res.send(JSON.stringify(mint))
+    console.log(mint);
+    res.send(`<p style="white-space: pre-wrap; overflow-wrap: anywhere;">${JSON.stringify(mint, null, 4)}</p>`)
 })
 
 http.createServer(app).listen(port, () => {
