@@ -338,8 +338,8 @@ const api = {
         });
         let txBody, txBuild
         if (meta !== null) {
-            let metadata = Seed.buildTransactionMetadata(meta)
-            txBuild = Seed.buildTransaction(coinselection, ttl, { metadata: metadata, config: cardanoconfig });
+            let metadata = Seed.buildTransactionMetadata(JSON.parse(JSON.stringify(meta)))
+            txBuild = Seed.buildTransaction(coinselection, ttl, { metadata, config: cardanoconfig });
             txBody = Seed.sign(txBuild, signingkeys, metadata);
         } else {
             txBuild = Seed.buildTransaction(coinselection, ttl);
@@ -375,8 +375,6 @@ const api = {
 
     async mint(id, addresses, meta, name, maxsupply, phrase) {
         // address to hold the minted tokens. You can use which you want.
-        console.log({...arguments})
-        return {id, addresses, meta, name, maxsupply, phrase}
         let walletserver = api.connect()
         let wallet = await api.getwallet(id).then(x => x)
         addresses = addresses || [(await wallet.getAddresses())[0]];
@@ -397,25 +395,25 @@ const api = {
 
         //generate policy id
         let scriptHash = Seed.getScriptHash(script);
-        let policyId = Seed.getPolicyId(scriptHash);
+        let policyid = Seed.getPolicyId(scriptHash);
 
         // metadata
         let data = {};
         let tokenData = {}
-        tokenData[policyId] = {
+        tokenData[policyid] = {
             1: {
-                name: "xymba",
-                description: "Xymba file token",
-                type: "File token",
-                id: "sob jawbkreb kjqbwr",
-                xymbatoken: "9c943e53c378425b17e5de08e93858afd95d67e713bd7e74e1c66a826cf6b066",
-                xymbatype: "file"
+                name: "AGAPE TOKEN (BETA)",
+                description: "Beta governance tokens",
+                type: "DAO",
+                xymid: "453130b4b8a21eb7742e8f16d63bda33a520e54ae1122c41bca6b7bf77580f91",
+                xymbatype: "token",
+                count: 19683
             }
         };
-        data[0] = tokenData;
+        data[0] = JSON.parse(JSON.stringify(tokenData));
 
         // asset
-        let asset = new AssetWallet(policyId, "XymbolPrototype1", 2);
+        let asset = new AssetWallet(policyid, "AGAPEpoolbeta", 19683);
 
         // token
         let tokens = [new TokenWallet(asset, script, [keyPair])];
@@ -469,11 +467,12 @@ const api = {
         // submit the tx	
         let signed = Buffer.from(tx.to_bytes()).toString('hex');
         console.log(1, { signed, tx, txBody, metadata, signingKeys, rootKey, coinSelection });
-        let txId = await walletserver.submitTx(signed);
+        // return {id, addresses, meta, name, maxsupply, phrase, signed, tx, txBody, metadata, signingKeys, rootKey, coinSelection}
+        let txid = await walletserver.submitTx(signed);
         // let txId = await api.submittx(signed).then(x => x).catch(e => { return { signed, tx, txBody, metadata, signingKeys, rootKey, coinSelection, wallet, e: e.response.data } });
 
-        console.log({ txId }, api.submittx(signed))
-        return txId
+        // console.log({ txId })
+        return {policyid, txid}
         /* {
             let walletserver = api.connect()
             let keys = api.keys()
