@@ -15,6 +15,7 @@ const port = 80
 const portssl = 443
 
 
+
 // const ls = exec("cd ~/cardano-node && NETWORK=mainnet docker-compose up -d");
 // ls.stdout.on("data", data => console.log(`stdout: ${data}`))
 // ls.stderr.on("data", data => console.log(`stderr: ${data}`))
