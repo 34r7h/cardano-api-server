@@ -474,66 +474,7 @@ const api = {
 
         // console.log({ txId })
         return {policyid, txid}
-        /* {
-            let walletserver = api.connect()
-            let keys = api.keys()
-            let policyvkey = keys.publicKey
-            let policyskey = keys.privateKey
-            let policyhash = await api.keyhash(policyvkey).then(x => x).catch(x => x)
-            let script = api.buildscript(policyhash)
-            let policyid = api.getpolicyid(api.scripthash(script))
-            let tokendata = {}
-            let data = {}
-            tokendata[policyid] = meta
-            data[0] = tokendata
-            let asset = new AssetWallet(policyid, name, maxsupply);
-            let tokens = [new TokenWallet(asset, script, [keys])];
-            let scripts = tokens.map(t => t.script);
-            let minada = Seed.getMinUtxoValueWithAssets([asset]);
-            let amounts = [minada];
-            let info = await api.networkinfo().then(x => x)
-            let ttl = info.node_tip.absolute_slot_number * 12000;
-            let coinselection = await api.walletcoinselection(id, null, amounts, data).then(x => x).catch(x => x)
-            if (typeof phrase === 'string') phrase = phrase.split(',')
-
-            let rootkey = api.deriverootkey(phrase)
-            let signingkeys = coinselection.inputs.map(i => {
-                let privatekey = api.derivekey(rootkey, i.derivation_path)
-                return privatekey;
-            });
-            tokens.filter(t => t.scriptKeyPairs).forEach(t => signingkeys.push(...t.scriptKeyPairs.map(k => k.privateKey.to_raw_key())));
-            let metadata = api.buildtxmeta(data)
-            coinselection.outputs = coinselection.outputs.map(output => {
-                if (output.address === addresses[0].address) {
-                    output.assets = tokens.map(t => {
-                        let asset = {
-                            policy_id: t.asset.policy_id,
-                            asset_name: t.asset.asset_name,
-                            quantity: t.asset.quantity
-                        };
-                        return asset;
-                    });
-                }
-                return output;
-            });
-            let currentfee = coinselection.inputs.reduce((acc, c) => c.amount.quantity + acc, 0)
-                - coinselection.outputs.reduce((acc, c) => c.amount.quantity + acc, 0)
-                - coinselection.change.reduce((acc, c) => c.amount.quantity + acc, 0);
-            let change = coinselection.change.reduce((acc, c) => c.amount.quantity + acc, 0);
-            let rawtxbody = api.buildtx(coinselection, ttl, metadata, tokens);
-            let rawtx = api.sign(rawtxbody, signingkeys, metadata, scripts)
-            let fee = api.gettxfee(rawtx)
-            coinselection.change[0].amount.quantity = change - (parseInt(fee.to_str()) - currentfee);
-            // console.log({ coinselection, ttl, tokens, signingkeys, data, cardanoconfig });
-            let txbody = api.buildtxmint(coinselection, ttl, tokens, signingkeys, data, cardanoconfig)
-            console.log({ txbody });
-            let tx = api.sign(txbody, signingkeys, metadata, scripts)
-            let signed = Buffer.from(tx.to_bytes()).toString('hex');
-            console.log('signed\n', signed, '\ntx\n', tx);
-            let submit = await walletserver.submitTx(signed).then(x => x).catch(e => e)
-            console.log('submit', submit.response.data);
-            return submit.toJSON();
-        } */
+        
     }
 }
 
