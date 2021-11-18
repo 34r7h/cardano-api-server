@@ -1,5 +1,4 @@
 var fs = require('fs')
-
 var http = require('http')
 var https = require('https')
 // const fetch = require('node-fetch')
@@ -13,14 +12,47 @@ const app = express()
 app.use(cors())
 const port = 80
 const portssl = 443
+const crypto = require("crypto-js");
 
+const format = {
+    stringify(cipherParams) {
+        // create json object with ciphertext
+        var jsonObj = { ct: cipherParams.ciphertext.toString(crypto.enc.Hex) };
 
+        // optionally add iv or salt
+        if (cipherParams.iv) {
+            jsonObj.iv = cipherParams.iv.toString();
+        }
 
-// const ls = exec("cd ~/cardano-node && NETWORK=mainnet docker-compose up -d");
-// ls.stdout.on("data", data => console.log(`stdout: ${data}`))
-// ls.stderr.on("data", data => console.log(`stderr: ${data}`))
-// ls.on('error', (error) => console.log(`error: ${error.message}`));
-// ls.on("close", code => console.log(`child process exited with code ${code}`));
+        if (cipherParams.salt) {
+            jsonObj.s = cipherParams.salt.toString();
+        }
+        // stringify json object
+        return jsonObj.ct + '_' + jsonObj.iv + '_' + jsonObj.s;
+    },
+    parse(jsonStr) {
+        // parse json string
+        let encarray = jsonStr.split('_')
+        console.log('parsing it out', encarray);
+        // var jsonObj = JSON.parse(jsonStr);
+
+        // extract ciphertext from json object, and create cipher params object
+        var cipherParams = crypto.lib.CipherParams.create({
+            ciphertext: crypto.enc.Hex.parse(encarray[0])
+        });
+
+        // optionally extract iv or salt
+
+        if (encarray[1]) {
+            cipherParams.iv = crypto.enc.Hex.parse(encarray[1]);
+        }
+
+        if (encarray[2]) {
+            cipherParams.salt = crypto.enc.Hex.parse(encarray[2]);
+        }
+        return cipherParams;
+    }
+}
 
 const testnet = false;
 let cconfig;
@@ -125,6 +157,8 @@ if (testnet) {
 const cardanoconfig = cconfig
 let docs = (() => {
     let api = {}
+    api[`encipher`] = { example: `/encipher?msg=somemessage&pass=somepass` }
+    api[`decipher`] = { example: `/decipher` }
     api[`docs`] = { example: `/docs` }
     api[`qr`] = { example: `/qr?address=addr1q87cmda6w8dvvqpt7m3t3wpqvucn0jyap2g484dhxe7x72d7fv9x2q6avt5qk480fev7uq5dkhq6q2qu006uu5tlt8ysgzmdy3&amount=1` }
     api[`network`] = { example: `/network` }
@@ -146,7 +180,7 @@ let docs = (() => {
     api[`delegate`] = { example: `/delegate?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d&pool=pool1fxcvkd47crljtjlqlj0ullargjrguj9meev2vj0aq574zpq9nec&pass=xymbacardano` }
     api[`wallet-stats`] = { example: `/wallet-stats?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d` }
     api[`coin-select`] = { example: `/coin-select?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d&amounts=4234324&data={"hello":"world"}` }
-    api[`delete-wallet`] = { example: ` /delete-wallet?wallet=$ID` }
+    // api[`delete-wallet`] = { example: ` /delete-wallet?wallet=$ID` }
     api[`stop-delegate`] = { example: `/stop-delegate?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d&pass=xymbacardano` }
     api[`change-password`] = { example: `/change-password?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d&oldpass=xymbacardano&newpass=xymbacardanowalletbro` }
     api[`withdraw-rewards`] = { example: `/withdraw-rewards?wallet=b112d4a931cd6c51bc04ec2b54112a220e66406d&pass=xymbacardano` }
@@ -198,6 +232,9 @@ const api = {
         return [recoveryphrase, await walletserver.createOrRestoreShelleyWallet(name, mnemonicsentence, passphrase)];
     },
     async listaddresses(id, option, key) {
+        if (!option) {
+            option = 'unused'
+        }
         let wallet = await api.getwallet(id).then(x => x)
         switch (option) {
             case 'unused':
@@ -274,10 +311,10 @@ const api = {
         // console.log('getCoinSelection()', await wallet.getCoinSelection(addresses, amounts, data).then(x => x));
         return await wallet.getCoinSelection(addresses, amounts, data).then(x => x);
     },
-    async deletewallet(id) {
-        let wallet = await api.getwallet(id).then(x => x)
-        return await wallet.delete();
-    },
+    // async deletewallet(id) {
+    //     let wallet = await api.getwallet(id).then(x => x)
+    //     return await wallet.delete();
+    // },
     async walletdelegatestop(id, pass) {
         let wallet = await api.getwallet(id).then(x => x)
         return await wallet.stopDelegation(pass);
@@ -312,7 +349,7 @@ const api = {
         return await wallet.getTransactions(start, end);
     },
     async sendpayment(id, addresses, amounts, pass, meta) {
-        console.log({ id, addresses, amounts, pass, meta }, await api.getwallet(id).then(x => x).catch(e => e));
+        console.log({ id, addresses, amounts, pass, meta });
         let wallet = await api.getwallet(id).then(x => x).catch(e => e)
         console.log(wallet);
         return await wallet.sendPayment(pass, addresses, amounts, meta).then(x => x).catch(e => e);
@@ -322,12 +359,14 @@ const api = {
         console.log(Object.keys(wallet))
         return wallet.forgetTransaction(txid)
     },
-    async submittx(id, amounts, meta, phrase) {
+    async submittx(id, amounts, meta, phrase, address) {
+        console.log({ id, amounts, meta, phrase, address });
         let walletserver = api.connect()
         let addresses = await api.listaddresses(id).then(x => x.slice(0, 1))
         let info = await api.networkinfo().then(x => x)
         let ttl = info.node_tip.absolute_slot_number * 12000;
         let coinselection = await api.walletcoinselection(id, addresses, amounts, meta).then(x => x)
+
         if (Array.isArray(phrase)) phrase = phrase.join(' ')
         if (typeof phrase === 'string' && phrase.includes('[')) phrase = phrase.replace('[', '').replace(']', '').replace(/,/g, '')
         else if (typeof phrase === 'string') phrase = phrase.split(',')
@@ -337,6 +376,9 @@ const api = {
             let privateKey = Seed.deriveKey(rootkey, i.derivation_path).to_raw_key();
             return privateKey;
         });
+        console.log(coinselection.outputs);
+        address ? coinselection.outputs[0].address = address : null
+        console.log(coinselection.outputs);
         let txBody, txBuild
         if (meta !== null) {
             let metadata = Seed.buildTransactionMetadata(JSON.parse(JSON.stringify(meta)))
@@ -373,12 +415,19 @@ const api = {
         const signed = Seed.signMessage(privateKey, message);
         return api.verifymessage(publickey, message, signed);
     },
-
-    async mint(id, addresses, meta, name, maxsupply, phrase) {
+    async mint(id, address, meta, name, supply, phrase) {
+        console.log({ id, address, meta, name, supply, phrase });
         // address to hold the minted tokens. You can use which you want.
         let walletserver = api.connect()
         let wallet = await api.getwallet(id).then(x => x)
-        addresses = addresses || [(await wallet.getAddresses())[0]];
+        let addresses
+        if (address) {addresses = address}
+        else { 
+            addresses = [await api.listaddresses(id, 'unused').then(x => x.slice(0, 1)[0].id)] 
+            console.log(await addresses);
+        }
+        console.log(address == true, {address}, {addresses});
+        // let addresses = address !== undefined && || [await wallet.getAddresses()[0]];
 
         // blockchain config, this is where you can find protocol params, slotsPerKESPeriod etc.
         // This lib comes with  Mainnet, Testnet and LocalCluster config (Config.Mainnet, Config.Testnet and Config.LocalCluster), but you may consider provide your own to make sure they are up to date.
@@ -400,10 +449,10 @@ const api = {
 
         // metadata
         let data = {};
-        let tokenData = {}
-        tokenData[policyid] = {
+        let tokenData = {"721":{}}
+        tokenData['721'][policyid] = Object.keys(meta).length > 0 && { [name]: meta } || {
             1: {
-                name: "AGAPE TOKEN (BETA)",
+                name: "XYMBOL TOKENS (BETA)",
                 description: "Beta governance tokens",
                 type: "DAO",
                 xymid: "453130b4b8a21eb7742e8f16d63bda33a520e54ae1122c41bca6b7bf77580f91",
@@ -414,7 +463,7 @@ const api = {
         data[0] = JSON.parse(JSON.stringify(tokenData));
 
         // asset
-        let asset = new AssetWallet(policyid, "AGAPEpoolbeta", 19683);
+        let asset = new AssetWallet(policyid, name, supply);
 
         // token
         let tokens = [new TokenWallet(asset, script, [keyPair])];
@@ -433,7 +482,8 @@ const api = {
         let coinSelection = await wallet.getCoinSelection(addresses, amounts, data);
 
         // add signing keys
-        let rootKey = Seed.deriveRootKey(phrase.split(','));
+        let rootKey = phrase.includes(',') ? Seed.deriveRootKey(phrase.split(',')) : Seed.deriveRootKey(phrase.split(' '))
+        // let rootKey = Seed.deriveRootKey(phrase.split(','));
         let signingKeys = coinSelection.inputs.map(i => {
             let privateKey = Seed.deriveKey(rootKey, i.derivation_path).to_raw_key();
             return privateKey;
@@ -462,9 +512,10 @@ const api = {
 
         // we need to sing the tx and calculate the actual fee and the build again 
         // since the coin selection doesnt calculate the fee with the asset tokens included
+        console.log({ coinSelection: JSON.stringify(coinSelection) });
         let txBody = Seed.buildTransactionWithToken(coinSelection, ttl, tokens, signingKeys, { data: data, config: cconfig });
         let tx = Seed.sign(txBody, signingKeys, metadata, scripts);
-
+        console.log({ tx, txBody });
         // submit the tx	
         let signed = Buffer.from(tx.to_bytes()).toString('hex');
         console.log(1, { signed, tx, txBody, metadata, signingKeys, rootKey, coinSelection });
@@ -473,8 +524,21 @@ const api = {
         // let txId = await api.submittx(signed).then(x => x).catch(e => { return { signed, tx, txBody, metadata, signingKeys, rootKey, coinSelection, wallet, e: e.response.data } });
 
         // console.log({ txId })
-        return {policyid, txid}
-        
+        return { policyid, txid }
+
+    },
+    decryptphrase(emsg, pass) {
+        if (!pass) { const pass = fs.readFileSync(`./keys/phrase.password`, { encoding: 'utf8', flag: 'r' }) }
+        // console.log('wait', {emsg, pass});
+        const decrypted = crypto.AES.decrypt(emsg, pass, { format });
+        // console.log({d: decrypted.toString(crypto.enc.Utf8)});
+        return decrypted.toString(crypto.enc.Utf8);
+    },
+    encryptphrase(phrase, pass) {
+        if (!pass) { const pass = fs.readFileSync(`./keys/phrase.password`, { encoding: 'utf8', flag: 'r' }) }
+        const encrypted = crypto.AES.encrypt(phrase, pass, { format });
+        // fs.writeFileSync('./crypto.hash', encrypted.toString())
+        return encrypted.toString();
     }
 }
 
@@ -490,11 +554,35 @@ app.get('/', (req, res) => {
 })
 
 app.get('/docs', (req, res) => res.send(JSON.stringify(docs, null, 4)))
+app.get('/decipher', (req, res) => { // U2FsdGVkX19QmUjIcqEcPO0LTkSxXvyJdIbNeFZ+zzA= // U2FsdGVkX1+Osd6i8rucT/h+hIOvC/HkzaNTHOgQK7A=
+    let [emsg, pass] = [req.query.emsg, req.query.pass]
+    console.log({ emsg, pass });
+    const d = api.decryptphrase(emsg, pass)
+    res.send(d)
+})
+app.get('/encipher', (req, res) => {
+    let [msg, pass] = [req.query.msg, req.query.pass]
+    console.log({ msg, pass });
+    const h = api.encryptphrase(msg, pass)
+    console.log({ h });
+    res.send(h)
+})
 
-app.get('/qr', (req, res) => {
-    let gurl = `web+cardano:${req.query.address}?amount=${req.query.amount}`
+app.get('/qr', async (req, res) => {
+    let address, amount;
+    if (req.query.amountid) { // amountid is adding an amount of lovelace to the amount and sending it back for confirmation convenience and some identity protection if multiple hits come to an unused address.
+        let random = Math.floor(Math.random() * (9999 - 1000) + 1000);
+        amount = +req.query.amount + +('.00'+random)
+    } else {amount = req.query.amount}
+    if (!req.query.address) {
+        const walletid = '00397bdb4493693300bf39d44cfc16da97210c06'
+        const raddress = await api.listaddresses(walletid, 'unused').then(x => x.slice(0, 1))
+        address = raddress[0].id
+    } else {address = req.query.address}
+    
+    let gurl = `web+cardano:${address}?amount=${amount}`
     return qr.toDataURL(gurl, function (err, img) {
-        let html = `<img src="${img}"/><p style="overflow-wrap: anywhere;">${gurl}</p>`
+        let html = `<img src="${img}"><p style="overflow-wrap: anywhere;">${gurl}</p>`
         res.send(html)
         return html
     })
@@ -554,11 +642,11 @@ app.get('/list-wallets', async (req, res) => {
     return wallets
 })
 
-app.get('/delete-wallet', async (req, res) => {
-    let deletedwallet = await api.deletewallet(req.query.wallet).then(x => x).catch(e => e)
-    res.send(JSON.stringify(deletedwallet))
-    return deletedwallet
-})
+// app.get('/delete-wallet', async (req, res) => {
+//     let deletedwallet = await api.deletewallet(req.query.wallet).then(x => x).catch(e => e)
+//     res.send(JSON.stringify(deletedwallet))
+//     return deletedwallet
+// })
 app.get('/get-delegation', async (req, res) => {
     let delegated = await api.getdelegation(req.query.wallet).then(x => x).catch(e => e)
     res.send(JSON.stringify(delegated))
@@ -638,8 +726,8 @@ app.get('/pool-garbage', async (req, res) => {
 })
 app.get('/send-payment', async (req, res) => {
     console.log(JSON.stringify(req.query, null, 4));
-    let sendpayment = await api.sendpayment(req.query.wallet, req.query.addresses && req.query.addresses.split(',').map(y => new AddressWallet(y)), req.query.amounts.split(',').map(x => +x), req.query.pass, req.query.data ? JSON.parse(req.query.data) : null).then(x => x)
-    console.log(sendpayment);
+    let sendpayment = await api.sendpayment(req.query.wallet, req.query.address && req.query.address.split(',').map(y => new AddressWallet(y)), req.query.amounts.split(',').map(x => +x), req.query.secret, req.query.data ? JSON.parse(req.query.data) : null).then(x => x)
+    console.log({ sendpayment });
     res.send(JSON.stringify(sendpayment))
     return sendpayment
 })
@@ -649,14 +737,28 @@ app.get('/cancel-payment', async (req, res) => {
     return cancelpayment
 })
 app.get('/submit-tx', async (req, res) => {
-    let submittx = await api.submittx(req.query.wallet, req.query.amounts.split(',').map(x => +x), req.query.data ? JSON.parse(req.query.data) : null, req.query.phrase)
+    let phrase;
+    if (!req.query.phrase && req.query.secret) {
+        const emsg = fs.readFileSync(`./crypto.hash`, { encoding: 'utf8', flag: 'r' })
+        phrase = api.decryptphrase(emsg, req.query.secret)
+        console.log(phrase);
+    } else { phrase = req.query.phrase }
+    let submittx = await api.submittx(req.query.wallet, req.query.amounts.split(',').map(x => +x), req.query.data ? JSON.parse(req.query.data) : null, phrase, req.query.address)
     res.send(JSON.stringify(submittx))
     return submittx
 })
 app.get('/mint', async (req, res) => {
-    // id, addresses, data, name, maxsupply, phrase
-    let mint = await api.mint(req.query.id, req.query.addresses && req.query.addresses.split(',').map(y => new AddressWallet(y)), req.query.data ? JSON.parse(req.query.data) : null, req.query.name, req.query.maxsupply, req.query.phrase).then(x => x).catch(e => e)
-    console.log(mint);
+    // id, addresses, data, name, supply, phrase
+    console.log({req: req.query});
+    let phrase
+    if (!req.query.phrase && req.query.secret) {
+        const emsg = fs.readFileSync(`./crypto.hash`, { encoding: 'utf8', flag: 'r' })
+        phrase = api.decryptphrase(emsg, req.query.secret)
+        console.log(phrase, JSON.stringify(req.query.data, null, 4));
+    } else { phrase = req.query.phrase }
+    // id, addresses, meta, name, supply, phrase
+    let mint = await api.mint(req.query.id, req.query.address && req.query.address.split(',').map(y => new AddressWallet(y)) || null, JSON.parse(req.query.data), req.query.name, req.query.supply, phrase).then(x => x).catch(e => e)
+    console.log({mint});
     res.send(`<p style="white-space: pre-wrap; overflow-wrap: anywhere;">${JSON.stringify(mint, null, 4)}</p>`)
 })
 
@@ -664,27 +766,8 @@ http.createServer(app).listen(port, () => {
     console.log(`Example app listening at http://shwifty.io/`)
 })
 https.createServer({
-    key: fs.readFileSync('../keys/key.pem'),
-    cert: fs.readFileSync('../keys/cert.pem')
+    key: fs.readFileSync('./keys/key.pem'),
+    cert: fs.readFileSync('./keys/cert.pem')
 }, app).listen(portssl, () => {
     console.log(`Example ssl app listening at https://shwifty.io/`)
 })
-/*
-console.log('starting cardano node and wallet servers')
-console.log('closing open nodes', 'cd ~/cardano-node && docker-compose stop')
-
- const stopdockandroll = exec("cd ~/cardano-node && docker-compose stop && docker-compose ps")
-stopdockandroll.on('close', () => {
-    console.log('starting nodes', 'cd ~/cardano-node && NETWORK=mainnet docker-compose up -d')
-    let startdock = exec("cd ~/cardano-node && NETWORK=mainnet docker-compose up -d && docker-compose ps && cd ..")
-    startdock.stdout.on("data", data => {
-        console.log(`stdout: ${data}`)
-
-        startdock.stderr.on("data", data => console.log(`stderr: ${data}`))
-        startdock.on('error', (error) => console.log(`error: ${error.message}`));
-        startdock.on("close", code => console.log(`startdock process exited with code ${code}`));
-    })
-})
-stopdockandroll.on('error', (error) => console.log(`error: ${error.message}`));
-stopdockandroll.on("close", code => console.log(`stopdockandroll process exited with code ${code}`));
-*/
