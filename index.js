@@ -759,7 +759,7 @@ app.get('/mint', async (req, res) => {
     // id, addresses, meta, name, supply, phrase
     let mint = await api.mint(req.query.id, req.query.address && req.query.address.split(',').map(y => new AddressWallet(y)) || null, JSON.parse(req.query.data), req.query.name, req.query.supply, phrase).then(x => x).catch(e => e)
     console.log({mint});
-    res.send(`<p style="white-space: pre-wrap; overflow-wrap: anywhere;">${JSON.stringify(mint, null, 4)}</p>`)
+    res.send(`${JSON.stringify(mint)}`)
 })
 
 http.createServer(app).listen(port, () => {
