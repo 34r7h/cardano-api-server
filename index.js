@@ -304,11 +304,9 @@ const api = {
         return await wallet.getUtxoStatistics()
     },
     async walletcoinselection(id, addresses, amounts, data) {
-        // console.log('walletcoinselection()\n', id, addresses, amounts, data);
         let wallet = await api.getwallet(id).then(x => x)
         if (addresses == undefined) addresses = await api.listaddresses(id).then(x => x.slice(0, 1))
         if (data && typeof data == 'string') data = JSON.parse(data)
-        // console.log('getCoinSelection()', await wallet.getCoinSelection(addresses, amounts, data).then(x => x));
         return await wallet.getCoinSelection(addresses, amounts, data).then(x => x);
     },
     // async deletewallet(id) {
@@ -349,9 +347,7 @@ const api = {
         return await wallet.getTransactions(start, end);
     },
     async sendpayment(id, addresses, amounts, pass, meta) {
-        console.log({ id, addresses, amounts, pass, meta });
         let wallet = await api.getwallet(id).then(x => x).catch(e => e)
-        console.log(wallet);
         return await wallet.sendPayment(pass, addresses, amounts, meta).then(x => x).catch(e => e);
     },
     async cancelpayment(id, txid) { // BROKEN.. function undefined
@@ -360,7 +356,6 @@ const api = {
         return wallet.forgetTransaction(txid)
     },
     async submittx(id, amounts, meta, phrase, address) {
-        console.log({ id, amounts, meta, phrase, address });
         let walletserver = api.connect()
         let addresses = await api.listaddresses(id).then(x => x.slice(0, 1))
         let info = await api.networkinfo().then(x => x)
@@ -372,13 +367,10 @@ const api = {
         else if (typeof phrase === 'string') phrase = phrase.split(',')
         let rootkey = api.deriverootkey(phrase)
         let signingkeys = coinselection.inputs.map(i => {
-            // console.log(i);
             let privateKey = Seed.deriveKey(rootkey, i.derivation_path).to_raw_key();
             return privateKey;
         });
-        console.log(coinselection.outputs);
         address ? coinselection.outputs[0].address = address : null
-        console.log(coinselection.outputs);
         let txBody, txBuild
         if (meta !== null) {
             let metadata = Seed.buildTransactionMetadata(JSON.parse(JSON.stringify(meta)))
@@ -416,18 +408,13 @@ const api = {
         return api.verifymessage(publickey, message, signed);
     },
     async mint(id, address, meta, name, supply, phrase) {
-        console.log({ id, address, meta, name, supply, phrase });
-        // address to hold the minted tokens. You can use which you want.
         let walletserver = api.connect()
         let wallet = await api.getwallet(id).then(x => x)
         let addresses
         if (address) {addresses = address}
         else { 
             addresses = [await api.listaddresses(id, 'unused').then(x => x.slice(0, 1)[0].id)] 
-            console.log(await addresses);
         }
-        console.log(address == true, {address}, {addresses});
-        // let addresses = address !== undefined && || [await wallet.getAddresses()[0]];
 
         // blockchain config, this is where you can find protocol params, slotsPerKESPeriod etc.
         // This lib comes with  Mainnet, Testnet and LocalCluster config (Config.Mainnet, Config.Testnet and Config.LocalCluster), but you may consider provide your own to make sure they are up to date.
@@ -511,14 +498,11 @@ const api = {
         });
 
         // we need to sing the tx and calculate the actual fee and the build again 
-        // since the coin selection doesnt calculate the fee with the asset tokens included
-        console.log({ coinSelection: JSON.stringify(coinSelection) });
+        // since the coin selection doesnt calculate the fee with the asset tokens included;
         let txBody = Seed.buildTransactionWithToken(coinSelection, ttl, tokens, signingKeys, { data: data, config: cconfig });
         let tx = Seed.sign(txBody, signingKeys, metadata, scripts);
-        console.log({ tx, txBody });
         // submit the tx	
         let signed = Buffer.from(tx.to_bytes()).toString('hex');
-        console.log(1, { signed, tx, txBody, metadata, signingKeys, rootKey, coinSelection });
         // return {id, addresses, meta, name, maxsupply, phrase, signed, tx, txBody, metadata, signingKeys, rootKey, coinSelection}
         let txid = await walletserver.submitTx(signed);
         // let txId = await api.submittx(signed).then(x => x).catch(e => { return { signed, tx, txBody, metadata, signingKeys, rootKey, coinSelection, wallet, e: e.response.data } });
@@ -725,7 +709,6 @@ app.get('/pool-garbage', async (req, res) => {
     return poolgarbage
 })
 app.get('/send-payment', async (req, res) => {
-    console.log(JSON.stringify(req.query, null, 4));
     let sendpayment = await api.sendpayment(req.query.wallet, req.query.address && req.query.address.split(',').map(y => new AddressWallet(y)), req.query.amounts.split(',').map(x => +x), req.query.secret, req.query.data ? JSON.parse(req.query.data) : null).then(x => x)
     console.log({ sendpayment });
     res.send(JSON.stringify(sendpayment))
@@ -741,7 +724,6 @@ app.get('/submit-tx', async (req, res) => {
     if (!req.query.phrase && req.query.secret) {
         const emsg = fs.readFileSync(`./crypto.hash`, { encoding: 'utf8', flag: 'r' })
         phrase = api.decryptphrase(emsg, req.query.secret)
-        console.log(phrase);
     } else { phrase = req.query.phrase }
     let submittx = await api.submittx(req.query.wallet, req.query.amounts.split(',').map(x => +x), req.query.data ? JSON.parse(req.query.data) : null, phrase, req.query.address)
     res.send(JSON.stringify(submittx))
@@ -749,12 +731,10 @@ app.get('/submit-tx', async (req, res) => {
 })
 app.get('/mint', async (req, res) => {
     // id, addresses, data, name, supply, phrase
-    console.log({req: req.query});
     let phrase
     if (!req.query.phrase && req.query.secret) {
         const emsg = fs.readFileSync(`./crypto.hash`, { encoding: 'utf8', flag: 'r' })
         phrase = api.decryptphrase(emsg, req.query.secret)
-        console.log(phrase, JSON.stringify(req.query.data, null, 4));
     } else { phrase = req.query.phrase }
     // id, addresses, meta, name, supply, phrase
     let mint = await api.mint(req.query.id, req.query.address && req.query.address.split(',').map(y => new AddressWallet(y)) || null, JSON.parse(req.query.data), req.query.name, req.query.supply, phrase).then(x => x).catch(e => e)
