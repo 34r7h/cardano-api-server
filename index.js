@@ -355,6 +355,43 @@ const api = {
         console.log(Object.keys(wallet))
         return wallet.forgetTransaction(txid)
     },
+    async createtx(id, amounts, meta, phrase) {
+        // console.log({id, amounts, meta, phrase});
+        let address = meta.seller
+        //  let walletserver = api.connect()
+        let addresses = await api.listaddresses(id).then(x => x.slice(0, 1))
+        let info = await api.networkinfo().then(x => x)
+        let ttl = info.node_tip.absolute_slot_number * 12000;
+        let coinselection = await api.walletcoinselection(id, addresses, [+amounts * 1000000], meta).then(x => x)
+
+        if (Array.isArray(phrase)) phrase = phrase.join(' ')
+        if (typeof phrase === 'string' && phrase.includes('[')) phrase = phrase.replace('[', '').replace(']', '').replace(/,/g, '')
+        else if (typeof phrase === 'string') phrase = phrase.split(',')
+        let rootkey = api.deriverootkey(phrase)
+        let signingkeys = coinselection.inputs.map(i => {
+            let privateKey = Seed.deriveKey(rootkey, i.derivation_path).to_raw_key();
+            return privateKey;
+        });
+        address ? coinselection.outputs[0].address = address : null
+        let txBody, txBuild, metadata
+        console.log({meta});
+        if (meta !== null) {
+            metadata = Seed.buildTransactionMetadata(JSON.parse(JSON.stringify({0: meta})))
+            txBuild = Seed.buildTransaction(coinselection, ttl, { metadata, config: cardanoconfig });
+            txBody = Seed.sign(txBuild, signingkeys, metadata);
+        } else {
+            txBuild = Seed.buildTransaction(coinselection, ttl);
+            txBody = Seed.sign(txBuild, signingkeys);
+        }
+        let signed = Buffer.from(txBody.to_bytes()).toString('hex');
+        console.log({signed, metadata});
+        return signed
+        // return await walletserver.submitTx(signed).then(x => x).catch(e => e)
+    },
+    async submitsignedtx(signedtx){
+        let walletserver = api.connect()
+        return await walletserver.submitTx(signedtx).then(x => x).catch(e => e)
+    },
     async submittx(id, amounts, meta, phrase, address) {
         let walletserver = api.connect()
         let addresses = await api.listaddresses(id).then(x => x.slice(0, 1))
@@ -408,6 +445,7 @@ const api = {
         return api.verifymessage(publickey, message, signed);
     },
     async mint(id, address, meta, name, supply, phrase) {
+
         let walletserver = api.connect()
         let wallet = await api.getwallet(id).then(x => x)
         let addresses
@@ -507,8 +545,8 @@ const api = {
         let txid = await walletserver.submitTx(signed);
         // let txId = await api.submittx(signed).then(x => x).catch(e => { return { signed, tx, txBody, metadata, signingKeys, rootKey, coinSelection, wallet, e: e.response.data } });
 
-        // console.log({ txId })
-        return { policyid, txid }
+        console.log(JSON.stringify(coinSelection.outputs[0].assets[0], null, 4))
+        return { policyid, txid, hexname: coinSelection.outputs[0].assets[0].asset_name, name }
 
     },
     decryptphrase(emsg, pass) {
@@ -557,14 +595,15 @@ app.get('/qr', async (req, res) => {
     if (req.query.amountid) { // amountid is adding an amount of lovelace to the amount and sending it back for confirmation convenience and some identity protection if multiple hits come to an unused address.
         let random = Math.floor(Math.random() * (9999 - 1000) + 1000);
         amount = +req.query.amount + +('.00'+random)
-    } else {amount = req.query.amount}
+    } else {amount = req.query.amount || 0}
     if (!req.query.address) {
         const walletid = '00397bdb4493693300bf39d44cfc16da97210c06'
         const raddress = await api.listaddresses(walletid, 'unused').then(x => x.slice(0, 1))
         address = raddress[0].id
     } else {address = req.query.address}
     
-    let gurl = `web+cardano:${address}?amount=${amount}`
+    let gurl = `web+cardano:${address}${amount > 0 && '?amount=' + amount || ''}`
+    console.log(gurl);
     return qr.toDataURL(gurl, function (err, img) {
         let html = `<img src="${img}"><p style="overflow-wrap: anywhere;">${gurl}</p>`
         res.send(html)
@@ -719,6 +758,24 @@ app.get('/cancel-payment', async (req, res) => {
     res.send(JSON.stringify(cancelpayment))
     return cancelpayment
 })
+
+app.get('/create-tx', async (req, res) => {
+    console.log(JSON.stringify(req.query, null, 4));
+    let phrase;
+    if (!req.query.phrase && req.query.secret) {
+        const emsg = fs.readFileSync(`./crypto.hash`, { encoding: 'utf8', flag: 'r' })
+        phrase = api.decryptphrase(emsg, req.query.secret)
+    } else { phrase = req.query.phrase }
+    let createtx = await api.createtx(req.query.wallet, req.query.amounts, JSON.parse(req.query.data), phrase)
+    res.send(JSON.stringify(createtx))
+    return createtx
+})
+app.get('/submit-signed-tx', async (req, res) => {
+    console.log({tx: req.query.signedtx});
+    let submitsignedtx = await api.submitsignedtx(req.query.signedtx).then(x=>x)
+    res.send(JSON.stringify(submitsignedtx))
+    return submitsignedtx
+})
 app.get('/submit-tx', async (req, res) => {
     let phrase;
     if (!req.query.phrase && req.query.secret) {
@@ -731,6 +788,7 @@ app.get('/submit-tx', async (req, res) => {
 })
 app.get('/mint', async (req, res) => {
     // id, addresses, data, name, supply, phrase
+    console.log({req: req.query.data});
     let phrase
     if (!req.query.phrase && req.query.secret) {
         const emsg = fs.readFileSync(`./crypto.hash`, { encoding: 'utf8', flag: 'r' })
