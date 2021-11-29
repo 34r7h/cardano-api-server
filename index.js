@@ -9,10 +9,14 @@ var qr = require('qrcode')
 const { WalletServer, Seed, AssetWallet, TokenWallet, AddressWallet } = require('cardano-wallet-js');
 const { config } = require('process')
 const app = express()
+var bodyParser = require('body-parser');
 app.use(cors())
+app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.json());
 const port = 80
 const portssl = 443
 const crypto = require("crypto-js");
+
 
 const format = {
     stringify(cipherParams) {
@@ -355,9 +359,60 @@ const api = {
         console.log(Object.keys(wallet))
         return wallet.forgetTransaction(txid)
     },
+    async createlistingcontracts(data) {
+        console.log('createlistingcontracts function:', 'creating three contracts: return, send asset, and send money', data)
+        let thisdata = data
+        let wallet = await api.getwallet(thisdata.wallet).then(x => x).catch(e => e)
+        const contracts = {
+            return: (async () => {
+                let address = thisdata.selleraddress
+                let addresses = [new AddressWallet(thisdata.holdingaddress)]
+                console.log({ address, addresses }, { address }, { ours: addresses[0].id });
+                let asset = new AssetWallet(thisdata.policy, thisdata.name, 1);
+                console.log(Object.keys(WalletServer))
+                let assets = {}
+                assets[thisdata.holdingaddress] = [asset];
+                console.log({ assets, asset });
+                let minUtxo = Seed.getMinUtxoValueWithAssets([asset], cconfig)
+                console.log({ minUtxo });
+                let meta = [thisdata.xmbl];
+                let coinSelection = await wallet.getCoinSelection(addresses, [minUtxo], meta, assets);
+                coinSelection.outputs[0].address = address
+                console.log(JSON.stringify(coinSelection, null, 2));
+
+                let info = await api.networkinfo().then(x => x)
+                let ttl = info.node_tip.absolute_slot_number * 12000;
+                const emsg = fs.readFileSync(`./crypto.hash`, { encoding: 'utf8', flag: 'r' })
+                let phrase = api.decryptphrase(emsg, thisdata.secret)
+                let rootKey = Seed.deriveRootKey(phrase);
+                let signingKeys = coinSelection.inputs.map(i => {
+                    let privateKey = Seed.deriveKey(rootKey, i.derivation_path).to_raw_key();
+                    return privateKey;
+                });
+                let metadata = Seed.buildTransactionMetadata(meta);
+                let txBuild = Seed.buildTransaction(coinSelection, ttl, { metadata: metadata, config: cconfig });
+                let txBody = Seed.sign(txBuild, signingKeys, metadata);
+                let signed = Buffer.from(txBody.to_bytes()).toString('hex');
+                // let walletserver = api.connect()
+                console.log({ coinSelection, metadata, txBuild, txBody, signed });
+                return signed
+                // let txId = await walletserver.submitTx(signed);
+                // todo return the encrypted tx without submitting and test it's transportability
+                // return txId
+            })(),
+            sendasset: (() => {
+                return 'send asset contract'
+            })(),
+            sendmoney: (() => {
+                return 'send money contract'
+            })(),
+        }
+        return contracts
+    },
     async createtx(id, amounts, meta, phrase) {
-        // console.log({id, amounts, meta, phrase});
-        let address = meta.seller
+        console.log({ id, amounts, meta, phrase });
+        let address = JSON.parse(meta).seller
+        console.log({ address });
         //  let walletserver = api.connect()
         let addresses = await api.listaddresses(id).then(x => x.slice(0, 1))
         let info = await api.networkinfo().then(x => x)
@@ -374,21 +429,54 @@ const api = {
         });
         address ? coinselection.outputs[0].address = address : null
         let txBody, txBuild, metadata
-        console.log({meta});
+        console.log({ meta });
+
         if (meta !== null) {
-            metadata = Seed.buildTransactionMetadata(JSON.parse(JSON.stringify({0: meta})))
+            // data[0] = JSON.parse(JSON.stringify(meta))
+            // let dataarray = Object.fromEntries(Object.entries(JSON.parse(meta)).map((x, xi) => [Number(xi), { "string": x[1] }]))
+            let dataarray = Object.fromEntries(Object.entries(JSON.parse(meta)).map((x, xi) => {
+                return [xi, {
+                    v: { [typeof x[1]]: x[1] },
+                    k: { [typeof x[0]]: x[0] }
+                }]
+            }))
+            console.log({ dataarray: JSON.stringify(dataarray) });
+            // metadata = Seed.buildTransactionMetadata({0: JSON.parse(JSON.stringify(dataarray))})
+
+            let data = {};
+            let tokenData = { "721": {} }
+            tokenData['721']['XYMBOL_TOKENS_BETA'] = {
+                1: {
+                    name: "XYMBOL_TOKENS_BETA",
+                    description: "Beta governance tokens",
+                    type: "DAO",
+                    xymid: "453130b4b8a21eb7742e8f16d63bda33a520e54ae1122c41bca6b7bf77580f91",
+                    xymbatype: "token",
+                    // count: 19683
+                }
+            };
+            data[0] = JSON.parse(JSON.stringify(tokenData));
+            console.log({ data: JSON.stringify(data, null, 0) }, JSON.stringify(data).length);
+
+            metadata = Seed.buildTransactionMetadata(data)
+            let reverse = Seed.reverseMetadata(metadata)
+            console.log({ reverse }, { metadata });
             txBuild = Seed.buildTransaction(coinselection, ttl, { metadata, config: cardanoconfig });
             txBody = Seed.sign(txBuild, signingkeys, metadata);
+            console.log({ txBody, txBuild, signingkeys, metadata });
         } else {
+            console.log('No metadata');
             txBuild = Seed.buildTransaction(coinselection, ttl);
             txBody = Seed.sign(txBuild, signingkeys);
         }
         let signed = Buffer.from(txBody.to_bytes()).toString('hex');
-        console.log({signed, metadata});
-        return signed
-        // return await walletserver.submitTx(signed).then(x => x).catch(e => e)
+        console.log({ signed });
+        // return signed
+        let walletserver = api.connect()
+        return await walletserver.submitTx(signed).then(x => x).catch(e => e)
     },
-    async submitsignedtx(signedtx){
+    async submitsignedtx(signedtx) {
+        console.log(typeof signedtx, signedtx);
         let walletserver = api.connect()
         return await walletserver.submitTx(signedtx).then(x => x).catch(e => e)
     },
@@ -449,9 +537,9 @@ const api = {
         let walletserver = api.connect()
         let wallet = await api.getwallet(id).then(x => x)
         let addresses
-        if (address) {addresses = address}
-        else { 
-            addresses = [await api.listaddresses(id, 'unused').then(x => x.slice(0, 1)[0].id)] 
+        if (address) { addresses = address }
+        else {
+            addresses = [await api.listaddresses(id, 'unused').then(x => x.slice(0, 1)[0].id)]
         }
 
         // blockchain config, this is where you can find protocol params, slotsPerKESPeriod etc.
@@ -474,8 +562,8 @@ const api = {
 
         // metadata
         let data = {};
-        let tokenData = {"721":{}}
-        tokenData['721'][policyid] = Object.keys(meta).length > 0 && { [name]: meta } || {
+        let tokenData = {}
+        tokenData[policyid] = Object.keys(meta).length > 0 && { [name]: meta } || {
             1: {
                 name: "XYMBOL TOKENS (BETA)",
                 description: "Beta governance tokens",
@@ -485,7 +573,7 @@ const api = {
                 count: 19683
             }
         };
-        data[0] = JSON.parse(JSON.stringify(tokenData));
+        data['721'] = JSON.parse(JSON.stringify(tokenData));
 
         // asset
         let asset = new AssetWallet(policyid, name, supply);
@@ -535,7 +623,7 @@ const api = {
             return output;
         });
 
-        // we need to sing the tx and calculate the actual fee and the build again 
+        // we need to sign the tx and calculate the actual fee and the build again 
         // since the coin selection doesnt calculate the fee with the asset tokens included;
         let txBody = Seed.buildTransactionWithToken(coinSelection, ttl, tokens, signingKeys, { data: data, config: cconfig });
         let tx = Seed.sign(txBody, signingKeys, metadata, scripts);
@@ -594,14 +682,14 @@ app.get('/qr', async (req, res) => {
     let address, amount;
     if (req.query.amountid) { // amountid is adding an amount of lovelace to the amount and sending it back for confirmation convenience and some identity protection if multiple hits come to an unused address.
         let random = Math.floor(Math.random() * (9999 - 1000) + 1000);
-        amount = +req.query.amount + +('.00'+random)
-    } else {amount = req.query.amount || 0}
+        amount = +req.query.amount + +('.00' + random)
+    } else { amount = req.query.amount || 0 }
     if (!req.query.address) {
         const walletid = '00397bdb4493693300bf39d44cfc16da97210c06'
         const raddress = await api.listaddresses(walletid, 'unused').then(x => x.slice(0, 1))
         address = raddress[0].id
-    } else {address = req.query.address}
-    
+    } else { address = req.query.address }
+
     let gurl = `web+cardano:${address}${amount > 0 && '?amount=' + amount || ''}`
     console.log(gurl);
     return qr.toDataURL(gurl, function (err, img) {
@@ -758,23 +846,46 @@ app.get('/cancel-payment', async (req, res) => {
     res.send(JSON.stringify(cancelpayment))
     return cancelpayment
 })
-
-app.get('/create-tx', async (req, res) => {
-    console.log(JSON.stringify(req.query, null, 4));
+app.post('/createlistingcontracts', async (req, res) => {
+    console.log(
+        'createlistingcontracts endpoint:',
+        'calling createlistingcontracts function',
+        JSON.stringify({ body: req.body, query: req.query }, null, 4))
+    return await api.createlistingcontracts(req.body).then(x => res.send(JSON.stringify(x))).catch(e => res.send(JSON.stringify(e)))
+})
+app.post('/create-tx', async (req, res) => {
+    console.log(Object.keys(req), JSON.parse(JSON.stringify(req.body)));
+    let data = JSON.parse(JSON.stringify(req.body))
+    let wallet = data.wallet
+    data.wallet = null
+    delete data.wallet
+    console.log({ data, wallet });
+    // return res.send(JSON.stringify(data))
     let phrase;
-    if (!req.query.phrase && req.query.secret) {
+    if (!data.phrase && data.secret) {
         const emsg = fs.readFileSync(`./crypto.hash`, { encoding: 'utf8', flag: 'r' })
-        phrase = api.decryptphrase(emsg, req.query.secret)
-    } else { phrase = req.query.phrase }
-    let createtx = await api.createtx(req.query.wallet, req.query.amounts, JSON.parse(req.query.data), phrase)
+        phrase = api.decryptphrase(emsg, data.secret)
+    } else { phrase = data.phrase }
+    data.secret = null
+    delete data.secret
+    console.log({ data });
+
+    // let dataarray = Object.fromEntries(Object.entries(data).map((x, xi) => [xi, { 'string': x[1] }]))
+    // console.log({dataarray});
+    let createtx = await api.createtx(wallet, data.amount, JSON.stringify(data), phrase)
     res.send(JSON.stringify(createtx))
     return createtx
 })
-app.get('/submit-signed-tx', async (req, res) => {
-    console.log({tx: req.query.signedtx});
-    let submitsignedtx = await api.submitsignedtx(req.query.signedtx).then(x=>x)
-    res.send(JSON.stringify(submitsignedtx))
-    return submitsignedtx
+app.post('/submit-signed-tx', async (req, res) => {
+    console.log(req.body.signedtx);
+    // let body = JSON.parse(req.body)
+
+    return await api.submitsignedtx(req.body.signedtx).then(x => {
+        console.log({ "submitsigned": x });
+        res.send(JSON.stringify(x))
+        return x
+    }).catch(e => res.send(e))
+
 })
 app.get('/submit-tx', async (req, res) => {
     let phrase;
@@ -788,7 +899,7 @@ app.get('/submit-tx', async (req, res) => {
 })
 app.get('/mint', async (req, res) => {
     // id, addresses, data, name, supply, phrase
-    console.log({req: req.query.data});
+    console.log({ req: req.query.data });
     let phrase
     if (!req.query.phrase && req.query.secret) {
         const emsg = fs.readFileSync(`./crypto.hash`, { encoding: 'utf8', flag: 'r' })
@@ -796,7 +907,7 @@ app.get('/mint', async (req, res) => {
     } else { phrase = req.query.phrase }
     // id, addresses, meta, name, supply, phrase
     let mint = await api.mint(req.query.id, req.query.address && req.query.address.split(',').map(y => new AddressWallet(y)) || null, JSON.parse(req.query.data), req.query.name, req.query.supply, phrase).then(x => x).catch(e => e)
-    console.log({mint});
+    console.log({ mint });
     res.send(`${JSON.stringify(mint)}`)
 })
 
