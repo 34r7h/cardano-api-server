@@ -89,7 +89,7 @@ if (testnet) {
         }
     }
 } else {
-    cconfig = {
+    cconfig = { // after 1/21/22 node update 
         "activeSlotsCoeff": 0.05,
         "protocolParams": {
             "protocolVersion": {
@@ -112,7 +112,7 @@ if (testnet) {
             "keyDeposit": 2000000,
             "nOpt": 150,
             "rho": 0.003,
-            "tau": 0.20,
+            "tau": 0.2,
             "a0": 0.3
         },
         "genDelegs": {
@@ -157,6 +157,74 @@ if (testnet) {
         "maxKESEvolutions": 62,
         "securityParam": 2160
     }
+    // cconfig = {
+    //     "activeSlotsCoeff": 0.05,
+    //     "protocolParams": {
+    //         "protocolVersion": {
+    //             "minor": 0,
+    //             "major": 2
+    //         },
+    //         "decentralisationParam": 1,
+    //         "eMax": 18,
+    //         "extraEntropy": {
+    //             "tag": "NeutralNonce"
+    //         },
+    //         "maxTxSize": 16384,
+    //         "maxBlockBodySize": 65536,
+    //         "maxBlockHeaderSize": 1100,
+    //         "minFeeA": 44,
+    //         "minFeeB": 155381,
+    //         "minUTxOValue": 1000000,
+    //         "poolDeposit": 500000000,
+    //         "minPoolCost": 340000000,
+    //         "keyDeposit": 2000000,
+    //         "nOpt": 150,
+    //         "rho": 0.003,
+    //         "tau": 0.20,
+    //         "a0": 0.3
+    //     },
+    //     "genDelegs": {
+    //         "ad5463153dc3d24b9ff133e46136028bdc1edbb897f5a7cf1b37950c": {
+    //             "delegate": "d9e5c76ad5ee778960804094a389f0b546b5c2b140a62f8ec43ea54d",
+    //             "vrf": "64fa87e8b29a5b7bfbd6795677e3e878c505bc4a3649485d366b50abadec92d7"
+    //         },
+    //         "b9547b8a57656539a8d9bc42c008e38d9c8bd9c8adbb1e73ad529497": {
+    //             "delegate": "855d6fc1e54274e331e34478eeac8d060b0b90c1f9e8a2b01167c048",
+    //             "vrf": "66d5167a1f426bd1adcc8bbf4b88c280d38c148d135cb41e3f5a39f948ad7fcc"
+    //         },
+    //         "60baee25cbc90047e83fd01e1e57dc0b06d3d0cb150d0ab40bbfead1": {
+    //             "delegate": "7f72a1826ae3b279782ab2bc582d0d2958de65bd86b2c4f82d8ba956",
+    //             "vrf": "c0546d9aa5740afd569d3c2d9c412595cd60822bb6d9a4e8ce6c43d12bd0f674"
+    //         },
+    //         "f7b341c14cd58fca4195a9b278cce1ef402dc0e06deb77e543cd1757": {
+    //             "delegate": "69ae12f9e45c0c9122356c8e624b1fbbed6c22a2e3b4358cf0cb5011",
+    //             "vrf": "6394a632af51a32768a6f12dac3485d9c0712d0b54e3f389f355385762a478f2"
+    //         },
+    //         "162f94554ac8c225383a2248c245659eda870eaa82d0ef25fc7dcd82": {
+    //             "delegate": "4485708022839a7b9b8b639a939c85ec0ed6999b5b6dc651b03c43f6",
+    //             "vrf": "aba81e764b71006c515986bf7b37a72fbb5554f78e6775f08e384dbd572a4b32"
+    //         },
+    //         "2075a095b3c844a29c24317a94a643ab8e22d54a3a3a72a420260af6": {
+    //             "delegate": "6535db26347283990a252313a7903a45e3526ec25ddba381c071b25b",
+    //             "vrf": "fcaca997b8105bd860876348fc2c6e68b13607f9bbd23515cd2193b555d267af"
+    //         },
+    //         "268cfc0b89e910ead22e0ade91493d8212f53f3e2164b2e4bef0819b": {
+    //             "delegate": "1d4f2e1fda43070d71bb22a5522f86943c7c18aeb4fa47a362c27e23",
+    //             "vrf": "63ef48bc5355f3e7973100c371d6a095251c80ceb40559f4750aa7014a6fb6db"
+    //         }
+    //     },
+    //     "updateQuorum": 5,
+    //     "networkId": "Mainnet",
+    //     "initialFunds": {},
+    //     "maxLovelaceSupply": 45000000000000000,
+    //     "networkMagic": 764824073,
+    //     "epochLength": 432000,
+    //     "systemStart": "2017-09-23T21:44:51Z",
+    //     "slotsPerKESPeriod": 129600,
+    //     "slotLength": 1,
+    //     "maxKESEvolutions": 62,
+    //     "securityParam": 2160
+    // }
 }
 const cardanoconfig = cconfig
 let docs = (() => {
@@ -221,7 +289,7 @@ const api = {
         // console.log('building tx mint\n', { coinselection, ttl, tokens, keys, data });
         // console.log(Seed.buildTransactionWithToken(coinselection, ttl, tokens, keys, {data: data, config: cardanoconfig}))
         // console.log('building tx mint', keys);
-        let build = Seed.buildTransactionWithToken(coinselection, ttl, tokens, keys, { data: data, config: cardanoconfig })
+        let build = Seed.buildTransactionWithToken(coinselection, ttl, tokens, keys, { data: data })
         console.log('build', { build });
         return build
     },
@@ -360,54 +428,62 @@ const api = {
         return wallet.forgetTransaction(txid)
     },
     async createlistingcontracts(data) {
-        console.log('createlistingcontracts function:', 'creating three contracts: return, send asset, and send money', data)
+        console.log('createlistingcontracts function:', 'creating three contracts: return, send asset, and send money', JSON.stringify({ data }, null, 2))
         let thisdata = data
-        let wallet = await api.getwallet(thisdata.wallet).then(x => x).catch(e => e)
-        const contracts = {
-            return: (async () => {
-                let address = thisdata.selleraddress
-                let addresses = [new AddressWallet(thisdata.holdingaddress)]
-                console.log({ address, addresses }, { address }, { ours: addresses[0].id });
-                let asset = new AssetWallet(thisdata.policy, thisdata.name, 1);
-                console.log(Object.keys(WalletServer))
-                let assets = {}
-                assets[thisdata.holdingaddress] = [asset];
-                console.log({ assets, asset });
-                let minUtxo = Seed.getMinUtxoValueWithAssets([asset], cconfig)
-                console.log({ minUtxo });
-                let meta = [thisdata.xmbl];
-                let coinSelection = await wallet.getCoinSelection(addresses, [minUtxo], meta, assets);
-                coinSelection.outputs[0].address = address
-                console.log(JSON.stringify(coinSelection, null, 2));
+        return api.getwallet(thisdata.wallet).then(async w => {
+            const contracts = {
+                return: await (async () => {
+                    let address = thisdata.selleraddress
+                    let addresses = [new AddressWallet(thisdata.holdingaddress)]
+                    console.log({ address, addresses }, { address }, { ours: addresses[0].id });
+                    let asset = new AssetWallet(thisdata.policy, thisdata.name, 1);
+                    console.log(Object.keys(WalletServer))
+                    let assets = {}
+                    assets[thisdata.holdingaddress] = [asset];
+                    console.log({ assets, asset });
+                    let minUtxo = Seed.getMinUtxoValueWithAssets([asset], cconfig)
+                    let meta = [thisdata.xmbl];
+                    console.log({ minUtxo, meta })
+                    let coinSelection = await w.getCoinSelection(addresses, [minUtxo], meta, assets);
+                    coinSelection.outputs[0].address = address
+                    console.log(JSON.stringify(coinSelection, null, 2));
 
-                let info = await api.networkinfo().then(x => x)
-                let ttl = info.node_tip.absolute_slot_number * 12000;
-                const emsg = fs.readFileSync(`./crypto.hash`, { encoding: 'utf8', flag: 'r' })
-                let phrase = api.decryptphrase(emsg, thisdata.secret)
-                let rootKey = Seed.deriveRootKey(phrase);
-                let signingKeys = coinSelection.inputs.map(i => {
-                    let privateKey = Seed.deriveKey(rootKey, i.derivation_path).to_raw_key();
-                    return privateKey;
-                });
-                let metadata = Seed.buildTransactionMetadata(meta);
-                let txBuild = Seed.buildTransaction(coinSelection, ttl, { metadata: metadata, config: cconfig });
-                let txBody = Seed.sign(txBuild, signingKeys, metadata);
-                let signed = Buffer.from(txBody.to_bytes()).toString('hex');
-                // let walletserver = api.connect()
-                console.log({ coinSelection, metadata, txBuild, txBody, signed });
-                return signed
-                // let txId = await walletserver.submitTx(signed);
-                // todo return the encrypted tx without submitting and test it's transportability
-                // return txId
-            })(),
-            sendasset: (() => {
-                return 'send asset contract'
-            })(),
-            sendmoney: (() => {
-                return 'send money contract'
-            })(),
-        }
-        return contracts
+                    let info = await api.networkinfo().then(x => x)
+                    let ttl = info.node_tip.absolute_slot_number * 12000;
+                    const emsg = fs.readFileSync(`./crypto.hash`, { encoding: 'utf8', flag: 'r' })
+                    let phrase = api.decryptphrase(emsg, thisdata.secret)
+                    let rootKey = Seed.deriveRootKey(phrase);
+                    let signingKeys = coinSelection.inputs.map(i => {
+                        let privateKey = Seed.deriveKey(rootKey, i.derivation_path).to_raw_key();
+                        return privateKey;
+                    });
+                    let metadata = Seed.buildTransactionMetadata(meta);
+                    let txBuild = Seed.buildTransaction(coinSelection, ttl, { metadata: metadata });
+                    let txBody = Seed.sign(txBuild, signingKeys, metadata);
+                    console.log({ txBuild, signingKeys, metadata });
+                    let signed = Buffer.from(txBody.to_bytes()).toString('hex');
+                    // let walletserver = api.connect()
+                    // console.log({ coinSelection, metadata, txBuild, txBody, signed });
+                    console.log({ signed });
+                    return signed
+                    // let txId = await walletserver.submitTx(signed);
+                    // todo return the encrypted tx without submitting and test it's transportability
+                    // return txId
+                })().then(x => x),
+                swap: await (async () => {
+                    console.log(thisdata);
+
+                    // check money is received to expected wallet address
+                    // in same tx, send asset(s) to payee or contract address(es)
+                    // send money to seller or contract address(es)
+                    return 'send asset contract'
+                })().then(x => x)
+            }
+            console.log('contracts', JSON.stringify(contracts.return, null, 4));
+            return contracts
+        }).catch(e => e)
+
+
     },
     async createtx(id, amounts, meta, phrase) {
         console.log({ id, amounts, meta, phrase });
@@ -542,11 +618,6 @@ const api = {
             addresses = [await api.listaddresses(id, 'unused').then(x => x.slice(0, 1)[0].id)]
         }
 
-        // blockchain config, this is where you can find protocol params, slotsPerKESPeriod etc.
-        // This lib comes with  Mainnet, Testnet and LocalCluster config (Config.Mainnet, Config.Testnet and Config.LocalCluster), but you may consider provide your own to make sure they are up to date.
-        // You can find the latest config files here: https://hydra.iohk.io/build/6498473/download/1/index.html
-        // let config = { ..., "protocolParams": {... "minFeeA": 44, ..., "minFeeB": 155381, ...} }
-
         // policy public/private keypair
         let keyPair = Seed.generateKeyPair();
         let policyVKey = keyPair.publicKey;
@@ -585,7 +656,7 @@ const api = {
         let scripts = tokens.map(t => t.script);
 
         // get min ada for address holding tokens
-        let minAda = Seed.getMinUtxoValueWithAssets([asset], cconfig);
+        let minAda = Seed.getMinUtxoValueWithAssets([asset]);
         let amounts = [minAda];
 
         // get ttl info
@@ -625,15 +696,17 @@ const api = {
 
         // we need to sign the tx and calculate the actual fee and the build again 
         // since the coin selection doesnt calculate the fee with the asset tokens included;
-        let txBody = Seed.buildTransactionWithToken(coinSelection, ttl, tokens, signingKeys, { data: data, config: cconfig });
+        let txBody = Seed.buildTransactionWithToken(coinSelection, ttl, tokens, signingKeys, { data: data });
         let tx = Seed.sign(txBody, signingKeys, metadata, scripts);
+
         // submit the tx	
         let signed = Buffer.from(tx.to_bytes()).toString('hex');
         // return {id, addresses, meta, name, maxsupply, phrase, signed, tx, txBody, metadata, signingKeys, rootKey, coinSelection}
+        // console.log('help',{txBody, signingKeys, metadata, scripts, tx, minAda, data});
         let txid = await walletserver.submitTx(signed);
         // let txId = await api.submittx(signed).then(x => x).catch(e => { return { signed, tx, txBody, metadata, signingKeys, rootKey, coinSelection, wallet, e: e.response.data } });
+        console.log({policyid, txid, hexname: coinSelection.outputs[0].assets[0].asset_name, name});
 
-        console.log(JSON.stringify(coinSelection.outputs[0].assets[0], null, 4))
         return { policyid, txid, hexname: coinSelection.outputs[0].assets[0].asset_name, name }
 
     },
@@ -748,6 +821,7 @@ app.get('/list-addresses', async (req, res) => {
     return addresses
 })
 app.get('/list-wallets', async (req, res) => {
+    console.log('list');
     let wallets = await api.listwallets().then(x => x).catch(e => e)
     res.send(JSON.stringify(wallets))
     return wallets
@@ -851,7 +925,10 @@ app.post('/createlistingcontracts', async (req, res) => {
         'createlistingcontracts endpoint:',
         'calling createlistingcontracts function',
         JSON.stringify({ body: req.body, query: req.query }, null, 4))
-    return await api.createlistingcontracts(req.body).then(x => res.send(JSON.stringify(x))).catch(e => res.send(JSON.stringify(e)))
+    return api.createlistingcontracts(req.body).then(x => {
+        console.log({ x });
+        res.send(JSON.stringify(x))
+    }).catch(e => res.send(JSON.stringify(e)))
 })
 app.post('/create-tx', async (req, res) => {
     console.log(Object.keys(req), JSON.parse(JSON.stringify(req.body)));
